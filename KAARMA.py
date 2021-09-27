@@ -6,7 +6,7 @@ import torch.nn as nn
 
 
 class KernelNode(nn.Module):
-    def __init__(self, dim_s, dim_y, _as, _au):
+    def __init__(self, dim_s=None, dim_y=None, _as=None, _au=None):
         super(KernelNode, self).__init__()
         self._as = nn.Parameter(torch.from_numpy(np.array([_as], dtype=np.float32)))
         self._au = nn.Parameter(torch.from_numpy(np.array([_au], dtype=np.float32)))
@@ -18,8 +18,6 @@ class KernelNode(nn.Module):
         self.S = None
         self.Phi = None
         self.A = None
-
-        # self.register_parameter('II', self.II)
 
     def initialization(self, s, phi, a):
         self.initial_state = nn.Parameter(copy.deepcopy(s))
@@ -53,19 +51,36 @@ class KernelNode(nn.Module):
                     _a = _a.unsqueeze(0)
                 self.A = nn.Parameter(torch.cat([self.A.data, _a], dim=0))
 
+    def load_state_dict(self, state_dict, strict=True):
+        self._au = nn.Parameter(state_dict['_au'])
+        self._as = nn.Parameter(state_dict['_as'])
+        self.Phi = nn.Parameter(state_dict['Phi'])
+        self.II = nn.Parameter(state_dict['II'])
+        self.initial_state = nn.Parameter(state_dict['initial_state'])
+        self.A = nn.Parameter(state_dict['A'])
+        self.S = nn.Parameter(state_dict['S'])
 
-class KAARMA:
+
+class KAARMA(nn.Module):
     def __init__(self, ns, ny, _as, _au):
+        super(KAARMA, self).__init__()
         self._ns = ns
         self.node = KernelNode(ns, ny, _as, _au)
-        self._s = torch.from_numpy(np.random.random((1, ns))).float()
-        self._s.requires_grad = False
-        # self._s = torch.from_numpy(np.ones((1, ns))).float()
+        np.random.seed(1)
+        s = torch.from_numpy(np.random.random((1, ns))).float()
+        # self._s.requires_grad = False
         temp = np.random.random(ns)
-        self.node.initialization(self._s, torch.Tensor([0]), torch.from_numpy(temp).float())
+        self.node.initialization(s, torch.Tensor([0]), torch.from_numpy(temp).float())
         self.loss = torch.nn.MSELoss()
 
-    def train(self, x, y, optimizer, lr, dq):
+    def forward(self, x):
+        state = None
+        output = None
+        for _x in x:
+            output, state = self.node(_x, state)
+        return output
+
+    def custom_train(self, x, y, lr, dq):
         for (_x, _y) in zip(x, y):
             truncated_length = 6
             states_0 = [None]
@@ -108,15 +123,15 @@ class KAARMA:
 
     def test(self, x, y):
         loss = []
+        acc = []
         for (_x, _y) in zip(x, y):
-            state = self._s
-            out = None
-            for inp in _x:
-                out, state = self.node(inp, state)
+            out = self.forward(_x)
             loss.append(((out - _y) ** 2).detach().numpy())
-        return np.mean(loss)
+            acc.append(((out > 0.5) == _y).numpy())
 
-    def cuda(self):
+        return np.mean(loss), np.mean(acc)
+
+    def cuda(self, device=None):
         self.node.cuda()
 
 
@@ -126,7 +141,7 @@ if __name__ == "__main__":
     x_train = []
     y_train = []
     tomita_type = 7
-    a = [3, 3, 4, 5, 6, 7, 8, 9, 10]
+    a = [3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     a.sort()
     for i in a:
         strings, target = generate_tomita(40, i, tomita_type)
@@ -141,6 +156,11 @@ if __name__ == "__main__":
     start = time.time()
     print('start training')
     for i in range(100):
-        model.train(x_train, y_train, None, 0.01, 0.3)
+        model.custom_train(x_train, y_train, 0.01, 0.3)
         print(model.node.A.shape, model.test(x_test, y_test))
     print(time.time() - start)
+    torch.save(model.node.state_dict(), 'model/%d.pkl' % tomita_type)
+
+    for i in range(50):
+        x_test, y_test = generate_tomita(100, 16, tomita_type)
+        print(model.test(x_test, y_test))
