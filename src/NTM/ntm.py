@@ -1,5 +1,7 @@
 # Copyright (c) 2017, Guy Zana <guyzana@gmail.com>
 # All rights reserved.
+# Github repository: https://github.com/loudinthecloud/pytorch-ntm.git
+
 
 #!/usr/bin/env python
 import torch
