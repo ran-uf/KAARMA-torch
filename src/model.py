@@ -89,6 +89,21 @@ class NTMCell(nn.Module):
         #   [controller_output; previous_reads ] -> output
         self.reset_parameters()
 
+        self.gates = []
+
+        self.linear_gate = torch.nn.Linear(self.controller_size, 1)
+
+    def init_states(self):
+        if not next(self.parameters()).is_cuda:
+            return (None, None, [torch.zeros((1, 100)), torch.zeros((1, 100))], torch.zeros((1, 4))), \
+                   torch.from_numpy(np.array([[0.]], dtype=np.float32))
+        else:
+            return (None, None, [torch.zeros((1, 100)).cuda(), torch.zeros((1, 100)).cuda()], torch.zeros((1, 4)).cuda()), \
+                   torch.from_numpy(np.array([[0.]], dtype=np.float32)).cuda()
+
+    def reset(self, batchsize):
+        self.memory.reset(batchsize)
+
     def create_new_state(self, batch_size):
         init_r = [r.clone().repeat(batch_size, 1) for r in self.init_r]
         controller_state = self.controller.create_new_state(batch_size)
@@ -108,6 +123,8 @@ class NTMCell(nn.Module):
         :param prev_state: The previous state of the NTM
         """
         # Unpack the previous state
+        self.gates = []
+
         inp, error = x
         prev_reads, prev_controller_state, prev_heads_states, prev_gate = prev_state
 
@@ -118,7 +135,12 @@ class NTMCell(nn.Module):
         heads_states = []
 
         gate = self.linear(controller_outp).unsqueeze(1)
-
+        # gate = torch.softmax(gate, dim=1)
+        gate = torch.sigmoid(gate)
+        crol = self.linear_gate(controller_outp)
+        crol = torch.sigmoid(crol)
+        gate = gate * crol + (1 - crol) * prev_gate
+        self.gates.append(gate)
         states = torch.cat(states, dim=0).unsqueeze(0)
         out_state = torch.bmm(gate, states).squeeze(1)
         for head, prev_head_state in zip(self.heads, prev_heads_states):
@@ -131,5 +153,5 @@ class NTMCell(nn.Module):
 
         state = (reads, controller_state, heads_states, gate)
 
-        return out_state[-1], state
+        return out_state[:, -1], state
 
