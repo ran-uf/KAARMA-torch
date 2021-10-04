@@ -10,10 +10,10 @@ class KernelNode(nn.Module):
         super(KernelNode, self).__init__()
         self._as = nn.Parameter(torch.from_numpy(np.array([_as], dtype=np.float32)))
         self._au = nn.Parameter(torch.from_numpy(np.array([_au], dtype=np.float32)))
-        self.II = torch.zeros((dim_y, dim_s))
-        self.II[:, dim_s - dim_y:] = torch.eye(dim_y)
-        self.II = nn.Parameter(self.II)
-        self.II.requires_grad = False
+        # self.II = torch.zeros((dim_y, dim_s))
+        # self.II[:, dim_s - dim_y:] = torch.eye(dim_y)
+        # self.II = nn.Parameter(self.II)
+        # self.II.requires_grad = False
         self.initial_state = None
         self.S = None
         self.Phi = None
@@ -35,7 +35,8 @@ class KernelNode(nn.Module):
         new_state = torch.mm(self.A.T, torch.exp(-self._as * torch.sum((self.S - state) ** 2, dim=1, keepdim=True)) *
                              torch.exp(-self._au * torch.sum((self.Phi - inp) ** 2, dim=1, keepdim=True)))
 
-        out = torch.mm(self.II, new_state)
+        out = new_state[-1]
+        # out = torch.mm(self.II, new_state)
         return out, new_state.T
 
     def update_memory(self, phi, s, a, dq):
@@ -55,7 +56,7 @@ class KernelNode(nn.Module):
         self._au = nn.Parameter(state_dict['_au'])
         self._as = nn.Parameter(state_dict['_as'])
         self.Phi = nn.Parameter(state_dict['Phi'])
-        self.II = nn.Parameter(state_dict['II'])
+        # self.II = nn.Parameter(state_dict['II'])
         self.initial_state = nn.Parameter(state_dict['initial_state'])
         self.A = nn.Parameter(state_dict['A'])
         self.S = nn.Parameter(state_dict['S'])
@@ -162,7 +163,7 @@ if __name__ == "__main__":
         model.custom_train(x_train, y_train, 0.01, 0.3)
         print(model.node.A.shape, model.test(x_test, y_test))
     print(time.time() - start)
-    torch.save(model.node.state_dict(), 'model/%d.pkl' % tomita_type)
+    # torch.save(model.node.state_dict(), 'model/%d.pkl' % tomita_type)
 
     for i in range(50):
         x_test, y_test = generate_tomita(100, 16, tomita_type)

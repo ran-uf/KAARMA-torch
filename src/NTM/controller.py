@@ -12,20 +12,20 @@ import numpy as np
 
 class LSTMController(nn.Module):
     """An NTM controller based on LSTM."""
-    def __init__(self, num_inputs, num_outputs, num_layers):
+    def __init__(self, num_inputs, hidden_size, num_layers):
         super(LSTMController, self).__init__()
 
         self.num_inputs = num_inputs
-        self.num_outputs = num_outputs
+        self.hidden_size = hidden_size
         self.num_layers = num_layers
 
         self.lstm = nn.LSTM(input_size=num_inputs,
-                            hidden_size=num_outputs,
+                            hidden_size=hidden_size,
                             num_layers=num_layers)
 
         # The hidden state is a learned parameter
-        self.lstm_h_bias = Parameter(torch.randn(self.num_layers, 1, self.num_outputs) * 0.05)
-        self.lstm_c_bias = Parameter(torch.randn(self.num_layers, 1, self.num_outputs) * 0.05)
+        self.lstm_h_bias = Parameter(torch.randn(self.num_layers, 1, self.hidden_size) * 0.05)
+        self.lstm_c_bias = Parameter(torch.randn(self.num_layers, 1, self.hidden_size) * 0.05)
 
         self.reset_parameters()
 
@@ -40,11 +40,11 @@ class LSTMController(nn.Module):
             if p.dim() == 1:
                 nn.init.constant_(p, 0)
             else:
-                stdev = 5 / (np.sqrt(self.num_inputs +  self.num_outputs))
+                stdev = 5 / (np.sqrt(self.num_inputs + self.hidden_size))
                 nn.init.uniform_(p, -stdev, stdev)
 
     def size(self):
-        return self.num_inputs, self.num_outputs
+        return self.num_inputs, self.hidden_size
 
     def forward(self, x, prev_state):
         x = x.unsqueeze(0)

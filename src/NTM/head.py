@@ -47,7 +47,7 @@ class NTMHeadBase(nn.Module):
         # Handle Activations
         k = k.clone()
         β = F.softplus(β)
-        g = F.sigmoid(g)
+        g = torch.sigmoid(g)
         s = F.softmax(s, dim=1)
         γ = 1 + F.softplus(γ)
 
@@ -97,7 +97,7 @@ class NTMWriteHead(NTMHeadBase):
         super(NTMWriteHead, self).__init__(memory, controller_size)
 
         # Corresponding to k, β, g, s, γ, e, a sizes from the paper
-        self.write_lengths = [self.M, 1, 1, 3, 1, self.M, self.M]
+        self.write_lengths = [self.M, 1, 1, 3, 1, self.M]
         self.fc_write = nn.Linear(controller_size, sum(self.write_lengths))
         self.reset_parameters()
 
@@ -112,19 +112,20 @@ class NTMWriteHead(NTMHeadBase):
     def is_read_head(self):
         return False
 
-    def forward(self, embeddings, w_prev):
+    def forward(self, x, w_prev):
         """NTMWriteHead forward function.
-        :param embeddings: input representation of the controller.
+        :param x: input representation of the controller.
         :param w_prev: previous step state
         """
+        embeddings, content = x
         o = self.fc_write(embeddings)
-        k, β, g, s, γ, e, a = _split_cols(o, self.write_lengths)
+        k, β, g, s, γ, e = _split_cols(o, self.write_lengths)
 
         # e should be in [0, 1]
-        e = F.sigmoid(e)
+        e = torch.sigmoid(e)
 
         # Write to memory
         w = self._address_memory(k, β, g, s, γ, w_prev)
-        self.memory.write(w, e, a)
+        self.memory.write(w, e, content)
 
         return w
