@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from src.NTM.memory import NTMMemory
-from src.model import Controller, NTMCell
+from src.model import Controller, NTMCell, NTM
 from src.NTM.head import NTMReadHead, NTMWriteHead
 from src.KAARMA import KernelNode as BaseModel
 
@@ -17,7 +17,7 @@ def net():
     heads = torch.nn.ModuleList()
     heads.append(NTMReadHead(memory, 100))
     heads.append(NTMWriteHead(memory, 100))
-    return NTMCell(1, 1, controller, memory, heads)
+    return NTM(1, 1, controller, memory, heads)
 
 
 def train_step(network, train_x, train_y, opt, cri):
@@ -40,9 +40,28 @@ def train_step(network, train_x, train_y, opt, cri):
     return loss.data
 
 
+def train_ntm(network, train_x, train_y, opt, cri):
+    network.reset(1)
+    opt.zero_grad()
+    pred = network(train_x, train_y)
+    loss = cri(pred, train_y)
+    loss.backward()
+    opt.step()
+    return loss.data
+
+
+strings, labels = generate_tomita_sequence(1, 100, 4)
+x_4 = torch.from_numpy(strings.astype(np.float32))
+y_4 = torch.from_numpy(labels.astype(np.float32))
 strings, labels = generate_tomita_sequence(1, 100, 5)
-x = torch.from_numpy(strings.astype(np.float32))
-y = torch.from_numpy(labels.astype(np.float32))
+x_5 = torch.from_numpy(strings.astype(np.float32))
+y_5 = torch.from_numpy(labels.astype(np.float32))
+strings, labels = generate_tomita_sequence(1, 100, 6)
+x_6 = torch.from_numpy(strings.astype(np.float32))
+y_6 = torch.from_numpy(labels.astype(np.float32))
+strings, labels = generate_tomita_sequence(1, 100, 7)
+x_7 = torch.from_numpy(strings.astype(np.float32))
+y_7 = torch.from_numpy(labels.astype(np.float32))
 
 model = net()
 
@@ -58,8 +77,11 @@ criterion = torch.nn.MSELoss()
 epochs = 100000
 report_freq = 50
 for i in range(epochs):
-    ls = train_step(model, x, y, optimizer, criterion)
+    ls_4 = train_ntm(model, x_4, y_4, optimizer, criterion)
+    ls_5 = train_ntm(model, x_5, y_5, optimizer, criterion)
+    ls_6 = train_ntm(model, x_6, y_6, optimizer, criterion)
+    ls_7 = train_ntm(model, x_7, y_7, optimizer, criterion)
     if (i + 1) % report_freq == 0:
-        print(ls)
+        print((ls_4 + ls_5 + ls_6 + ls_7) / 4)
 
 

@@ -89,9 +89,8 @@ class NTMCell(nn.Module):
         #   [controller_output; previous_reads ] -> output
         self.reset_parameters()
 
-        self.gates = []
-
         self.linear_gate = torch.nn.Linear(self.controller_size, 1)
+        self.gate = None
 
     def init_states(self):
         if not next(self.parameters()).is_cuda:
@@ -140,7 +139,7 @@ class NTMCell(nn.Module):
         crol = self.linear_gate(controller_outp)
         crol = torch.sigmoid(crol)
         gate = gate * crol + (1 - crol) * prev_gate
-        self.gates.append(gate)
+        self.gate = gate.clone()
         states = torch.cat(states, dim=0).unsqueeze(0)
         out_state = torch.bmm(gate, states).squeeze(1)
         for head, prev_head_state in zip(self.heads, prev_heads_states):
@@ -154,4 +153,27 @@ class NTMCell(nn.Module):
         state = (reads, controller_state, heads_states, gate)
 
         return out_state[:, -1], state
+
+
+class NTM(nn.Module):
+    def __init__(self, num_inputs, num_outputs, controller, memory, heads):
+        super(NTM, self).__init__()
+        self.ntm_cell = NTMCell(num_inputs, num_outputs, controller, memory, heads)
+        self.gate_trajectory = []
+
+    def reset(self, batch_size):
+        self.ntm_cell.reset(batch_size)
+
+    def forward(self, x, y):
+        length = x.shape[1]
+        state, error = self.ntm_cell.init_states()
+        o = []
+        self.gate_trajectory = []
+        for i in range(length):
+            _x, _y = x[:, i].unsqueeze(1), y[:, i].unsqueeze(1)
+            output, state = self.ntm_cell((_x, error), state)
+            error = _y - output
+            o.append(output)
+            self.gate_trajectory.append(self.ntm_cell.gate)
+        return torch.cat(o, dim=0).unsqueeze(0)
 
