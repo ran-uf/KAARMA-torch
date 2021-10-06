@@ -95,3 +95,5 @@ for i in range(epochs):
     if (ls_5 + ls_6) / 2 < min_loss:
         torch.save(model.state_dict(), 'model.pkl')
         min_loss = (ls_5 + ls_6) / 2
+
+gate = torch.cat(model.gate_trajectory).data.numpy()[:, 0, :]
