@@ -76,6 +76,7 @@ criterion = torch.nn.MSELoss()
 
 epochs = 100000
 report_freq = 50
+min_loss = 0.01
 for i in range(epochs):
     # ls_4 = train_ntm(model, x_4, y_4, optimizer, criterion)
     strings, labels = generate_tomita_sequence(1, 100, 5)
@@ -91,4 +92,6 @@ for i in range(epochs):
     if (i + 1) % report_freq == 0:
         print((ls_5 + ls_6) / 2)
 
-
+    if (ls_5 + ls_6) / 2 < min_loss:
+        torch.save(model.state_dict(), 'model.pkl')
+        min_loss = (ls_5 + ls_6) / 2
