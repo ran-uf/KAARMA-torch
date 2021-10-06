@@ -94,10 +94,10 @@ class NTMCell(nn.Module):
 
     def init_states(self):
         if not next(self.parameters()).is_cuda:
-            return (None, None, [torch.zeros((1, 100)), torch.zeros((1, 100))], torch.zeros((1, 4))), \
+            return (None, None, [torch.zeros((1, 100)), torch.zeros((1, 100))], 0.25 * torch.ones((1, 4))), \
                    torch.from_numpy(np.array([[0.]], dtype=np.float32))
         else:
-            return (None, None, [torch.zeros((1, 100)).cuda(), torch.zeros((1, 100)).cuda()], torch.zeros((1, 4)).cuda()), \
+            return (None, None, [torch.zeros((1, 100)).cuda(), torch.zeros((1, 100)).cuda()], 0.25 * torch.ones((1, 4)).cuda()), \
                    torch.from_numpy(np.array([[0.]], dtype=np.float32)).cuda()
 
     def reset(self, batchsize):
@@ -135,11 +135,12 @@ class NTMCell(nn.Module):
 
         gate = self.linear(controller_outp).unsqueeze(1)
         # gate = torch.softmax(gate, dim=1)
-        gate = torch.sigmoid(gate)
+        gate = torch.softmax(gate, dim=2)
         crol = self.linear_gate(controller_outp)
         crol = torch.sigmoid(crol)
         gate = gate * crol + (1 - crol) * prev_gate
         self.gate = gate.clone()
+        # print(self.gate.data)
         states = torch.cat(states, dim=0).unsqueeze(0)
         out_state = torch.bmm(gate, states).squeeze(1)
         for head, prev_head_state in zip(self.heads, prev_heads_states):

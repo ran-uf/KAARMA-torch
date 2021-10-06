@@ -77,11 +77,18 @@ criterion = torch.nn.MSELoss()
 epochs = 100000
 report_freq = 50
 for i in range(epochs):
-    ls_4 = train_ntm(model, x_4, y_4, optimizer, criterion)
+    # ls_4 = train_ntm(model, x_4, y_4, optimizer, criterion)
+    strings, labels = generate_tomita_sequence(1, 100, 5)
+    x_5 = torch.from_numpy(strings.astype(np.float32))
+    y_5 = torch.from_numpy(labels.astype(np.float32))
     ls_5 = train_ntm(model, x_5, y_5, optimizer, criterion)
+
+    strings, labels = generate_tomita_sequence(1, 100, 6)
+    x_6 = torch.from_numpy(strings.astype(np.float32))
+    y_6 = torch.from_numpy(labels.astype(np.float32))
     ls_6 = train_ntm(model, x_6, y_6, optimizer, criterion)
-    ls_7 = train_ntm(model, x_7, y_7, optimizer, criterion)
+    # ls_7 = train_ntm(model, x_7, y_7, optimizer, criterion)
     if (i + 1) % report_freq == 0:
-        print((ls_4 + ls_5 + ls_6 + ls_7) / 4)
+        print((ls_5 + ls_6) / 2)
 
 
