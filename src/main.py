@@ -2,41 +2,24 @@ import torch
 from KAARMA import *
 from tomita import generate_tomita, generate_tomita_sequence
 import time
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 
-x_train = []
-y_train = []
-tomita_type = 5
-a = [3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-a.sort()
-for i in a:
-    strings, target = generate_tomita(40, i, tomita_type)
-    for xx, yy in zip(strings, target):
-        x_train.append(torch.from_numpy(xx[:, np.newaxis]).float())
-        y_train.append(yy)
 
-x_test, y_test = generate_tomita(100, 16, tomita_type)
-
-print("test set", np.mean(y_test))
+tomita_type = 7
 model = KAARMA(4, 1, 2, 2)
-
-model.node.load_state_dict(torch.load('model/%d.pkl' % tomita_type))
+model.node.load_state_dict(torch.load('../model/%d.pkl' % tomita_type))
 model.eval()
 
 strings, desires = generate_tomita_sequence(1, 200, tomita_type)
 
-res = model(strings[0], True)
+res, state_trajectory = model(strings[0], True)
 res = res > 0.5
 print(res == desires)
-# criterion = nn.MSELoss()
-# optimizer = torch.optim.Adam(model.parameters(), lr=0.000005)
+X_reduced = PCA(n_components=2).fit_transform(state_trajectory)
+plt.scatter(X_reduced[:, 0], X_reduced[:, 1])
+plt.show()
+kmeans = KMeans(n_clusters=7).fit(state_trajectory)
 
-# for epoch in range(5000):
-#     for (x, y) in zip(x_train, y_train):
-#         model.train()
-#         pred = model.forward(x)
-#         loss = criterion(pred, torch.Tensor([[y]]))
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-#     model.eval()
-#     print(model.test(x_test, y_test))
+np.save('../trajectory/%d.npy' % tomita_type, kmeans.cluster_centers_)

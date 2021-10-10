@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 import numpy as np
+import os
 
 
 def _convolve(w, s):
@@ -20,7 +21,7 @@ def _convolve(w, s):
 
 class NTMMemory(nn.Module):
     """Memory bank for NTM."""
-    def __init__(self, N, M):
+    def __init__(self, N, M, fn):
         """Initialize the NTM Memory matrix.
         The memory's dimensions are (batch_size x N x M).
         Each batch has it's own memory matrix.
@@ -29,25 +30,40 @@ class NTMMemory(nn.Module):
         """
         super(NTMMemory, self).__init__()
 
-        self.N = N
-        self.M = M
-
-        # The memory bias allows the heads to learn how to initially address
-        # memory locations by content
-        self.register_buffer('mem_bias', torch.Tensor(N, M))
-
-        # Initialize memory bias
-        stdev = 1 / (np.sqrt(N + M))
-        nn.init.uniform_(self.mem_bias, -stdev, stdev)
-
         self.batch_size = None
         self.memory = None
         self.prev_mem = None
+
+        if N is None:
+            self.mem_bias = None
+            self.load_memory(fn)
+        else:
+            self.N = N
+            self.M = M
+
+            # The memory bias allows the heads to learn how to initially address
+            # memory locations by content
+            self.register_buffer('mem_bias', torch.Tensor(N, M))
+
+            # Initialize memory bias
+            stdev = 1 / (np.sqrt(N + M))
+            nn.init.uniform_(self.mem_bias, -stdev, stdev)
+
+    def load_memory(self, fn):
+        files = os.listdir(fn)
+        m = []
+        for file in files:
+            m.append(np.load(fn + '/' + file))
+        m = np.vstack(m)
+        self.mem_bias = torch.from_numpy(m)
+        self.M = self.mem_bias.shape[1]
+        self.N = self.mem_bias.shape[0]
 
     def reset(self, batch_size):
         """Initialize memory from bias, for start-of-sequence."""
         self.batch_size = batch_size
         self.memory = self.mem_bias.clone().repeat(batch_size, 1, 1)
+        self.memory.require_grad = False
 
     def size(self):
         return self.N, self.M

@@ -78,12 +78,14 @@ class KAARMA(nn.Module):
         state = None
         output = None
         outputs = []
+        states = []
         for _x in x:
             output, state = self.node(_x, state)
             if ls:
+                states.append(state.data.numpy())
                 outputs.append(output.data.numpy())
         if ls:
-            return np.array(outputs).reshape(-1)
+            return np.array(outputs).reshape(-1), np.vstack(states)
         else:
             return output
 

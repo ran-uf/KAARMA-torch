@@ -94,10 +94,10 @@ class NTMCell(nn.Module):
 
     def init_states(self):
         if not next(self.parameters()).is_cuda:
-            return (None, None, [torch.zeros((1, 100)), torch.zeros((1, 100))], 0.25 * torch.ones((1, 4))), \
+            return (None, None, [torch.zeros((1, self.N))], torch.Tensor([[0, 0., 1.0, 0]])), \
                    torch.from_numpy(np.array([[0.]], dtype=np.float32))
         else:
-            return (None, None, [torch.zeros((1, 100)).cuda(), torch.zeros((1, 100)).cuda()], 0.25 * torch.ones((1, 4)).cuda()), \
+            return (None, None, [torch.zeros((1, self.N)).cuda(), torch.zeros((1, 100)).cuda()], 0.25 * torch.ones((1, 4)).cuda()), \
                    torch.from_numpy(np.array([[0.]], dtype=np.float32)).cuda()
 
     def reset(self, batchsize):
