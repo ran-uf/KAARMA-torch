@@ -94,7 +94,7 @@ class NTMCell(nn.Module):
 
     def init_states(self):
         if not next(self.parameters()).is_cuda:
-            return (None, None, [torch.zeros((1, self.N))], torch.Tensor([[0, 0., 1.0, 0]])), \
+            return (None, None, [torch.zeros((1, self.N))], torch.Tensor([[0.25, 0.25, 0.25, 0.25]])), \
                    torch.from_numpy(np.array([[0.]], dtype=np.float32))
         else:
             return (None, None, [torch.zeros((1, self.N)).cuda(), torch.zeros((1, 100)).cuda()], 0.25 * torch.ones((1, 4)).cuda()), \
@@ -138,6 +138,7 @@ class NTMCell(nn.Module):
         gate = torch.softmax(gate, dim=2)
         crol = self.linear_gate(controller_outp)
         crol = torch.sigmoid(crol)
+        # crol = crol * torch.sigmoid(error)
         gate = gate * crol + (1 - crol) * prev_gate
         self.gate = gate.clone()
         # print(self.gate.data)
