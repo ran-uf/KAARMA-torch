@@ -10,14 +10,11 @@ class KernelNode(nn.Module):
         super(KernelNode, self).__init__()
         self._as = nn.Parameter(torch.from_numpy(np.array([_as], dtype=np.float32)))
         self._au = nn.Parameter(torch.from_numpy(np.array([_au], dtype=np.float32)))
-        # self.II = torch.zeros((dim_y, dim_s))
-        # self.II[:, dim_s - dim_y:] = torch.eye(dim_y)
-        # self.II = nn.Parameter(self.II)
-        # self.II.requires_grad = False
         self.initial_state = None
         self.S = None
         self.Phi = None
         self.A = None
+        self.memory_size = 0
 
     def initialization(self, s, phi, a):
         self.initial_state = nn.Parameter(copy.deepcopy(s))
@@ -28,16 +25,23 @@ class KernelNode(nn.Module):
         self.S.requires_grad = False
         self.Phi.requires_grad = False
         self.A.requires_grad = False
+        self.memory_size = 1
 
     def forward(self, inp, state):
         if state is None:
-            state = self.initial_state
-        new_state = torch.mm(self.A.T, torch.exp(-self._as * torch.sum((self.S - state) ** 2, dim=1, keepdim=True)) *
-                             torch.exp(-self._au * torch.sum((self.Phi - inp) ** 2, dim=1, keepdim=True)))
+            state = self.initial_state.repeat(inp.shape[0], 1)
 
-        out = new_state[-1]
+        new_state = []
+        for _inp, _state in zip(inp, state):
+            _new_state = torch.mm(self.A.T, torch.exp(
+                -self._as * torch.sum((self.S - _state.repeat(self.memory_size, 1)) ** 2, dim=1,
+                                      keepdim=True)) * torch.exp(
+                -self._au * torch.sum((self.Phi - _inp) ** 2, dim=1, keepdim=True)))
+            new_state.append(_new_state.T)
+        new_state = torch.cat(new_state, dim=0)
+        out = new_state[:, -1]
         # out = torch.mm(self.II, new_state)
-        return out, new_state.T
+        return out, new_state
 
     def update_memory(self, phi, s, a, dq):
         for (_phi, _s, _a) in zip(phi, s, a):
@@ -60,6 +64,7 @@ class KernelNode(nn.Module):
         self.initial_state = nn.Parameter(state_dict['initial_state'])
         self.A = nn.Parameter(state_dict['A'])
         self.S = nn.Parameter(state_dict['S'])
+        self.memory_size = self.A.shape[0]
 
 
 class KAARMA(nn.Module):
@@ -79,13 +84,14 @@ class KAARMA(nn.Module):
         output = None
         outputs = []
         states = []
-        for _x in x:
-            output, state = self.node(_x, state)
+        seq_length = x.shape[1]
+        for i in range(seq_length):
+            output, state = self.node(x[:, i], state)
             if ls:
-                states.append(state.data.numpy())
-                outputs.append(output.data.numpy())
+                states.append(state)
+                outputs.append(output)
         if ls:
-            return np.array(outputs).reshape(-1), np.vstack(states)
+            return torch.stack(outputs, dim=1), torch.stack(states, dim=1)
         else:
             return output
 

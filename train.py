@@ -2,12 +2,16 @@ import numpy as np
 import torch
 
 from src.NTM.memory import NTMMemory
-from src.model import Controller, NTMCell, NTM
+from src.NTM.controller import LSTMController
+from src.NTM.ntm import NTM
+from src.mKAARMA import MKAARMACell, DiscMaker
 from src.NTM.head import NTMReadHead, NTMWriteHead
 from src.KAARMA import KernelNode as BaseModel
 
 from src.tomita import generate_tomita_sequence
 from src.KAARMA import KAARMA
+
+import matplotlib.pyplot as plt
 
 
 def myloss(x, y):
@@ -20,20 +24,38 @@ def get_data(batch_size, length, m, tomita_type):
     return s, _y[np.newaxis, :]
 
 
-def net():
-    # memory = NTMMemory(N=100, M=4)
-    memory = NTMMemory(N=None, M=None, fn='trajectory')
-    memory.reset(1)
-    controller = Controller(BaseModel, input_size=17, hidden_size=100, num_layers=2)
-    controller.load_external_memory('./model')
-    heads = torch.nn.ModuleList()
-    heads.append(NTMReadHead(memory, 100))
-    # heads.append(NTMWriteHead(memory, 100))
-    return NTM(1, 1, controller, memory, heads)
+def train(model, train_x, train_y, cri, optim):
+    optim.zero_grad()
+    pred = model(train_x, train_y)
+    loss = cri(pred, train_y)
+    loss.backward()
+    optim.step()
+    return loss.cpu().data.numpy()
+
+
+models = torch.nn.ModuleList()
+trajectories = []
+for i in [4, 5, 6, 7]:
+    m = BaseModel(4, 1, 2, 2)
+    m.load_state_dict(torch.load('model/%d.pkl' % i))
+    m.requires_grad_(False)
+    models.append(m)
+    trajectories.append(np.load('trajectory/%d.npy' % i))
+trajectories = np.vstack(trajectories)
+trajectories = torch.from_numpy(trajectories)
+decoder = MKAARMACell(models, trajectories).eval()
+
+controller = LSTMController(121, 100, 2)
+memory = NTMMemory(100, 20, None)
+readhead = NTMReadHead(memory, 100)
+writehead = NTMWriteHead(memory, 100)
+heads = torch.nn.ModuleList([readhead, writehead])
+ntm = NTM(25, 4, controller, memory, heads)
+
+discmaker = DiscMaker(decoder, ntm)
 
 
 # def train_step(network, train_x, train_y, opt, cri):
-#     network.reset(1)
 #     opt.zero_grad()
 #
 #     length = train_x.shape[1]
@@ -52,57 +74,130 @@ def net():
 #     return loss.data
 
 
-def train_ntm(network, train_x, train_y, opt, cri):
-    network.reset(1)
-    opt.zero_grad()
-    pred = network(train_x, train_y)
-    loss = cri(pred, train_y)
-    loss.backward()
-    opt.step()
-    return loss.data
-
-
-model = net()
+# model = net()
 
 # model.cuda()
 # x = x.cuda()
 # y = y.cuda()
 
-optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                             lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+# optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
+#                              lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
 # optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
-criterion = torch.nn.MSELoss()
+# criterion = torch.nn.MSELoss()
 # criterion = myloss
+#
+# epochs = 100000
+# report_freq = 50
+# min_loss = 0.01
+#
+# models = torch.nn.ModuleList()
+# for i in [0, 1, 2, 3]:
+#     _m = KAARMA(4, 1, 2, 2)
+#     _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
+#     _m.eval()
+#     models.append(_m)
 
-epochs = 100000
+# for i in range(epochs):
+#     loss = []
+#     for j in [0, 1, 2, 3]:
+#         length = np.random.randint(3, 100)
+#         # x, y = get_data(1, length, models[j], j + 4)
+#         x, y = generate_tomita_sequence(1, length, j + 4)
+#         x = torch.from_numpy(x.astype(np.float32))
+#         y = torch.from_numpy(y.astype(np.float32))
+#         _loss = train_ntm(model, x, y, optimizer, criterion)
+#         loss.append(_loss)
+#     if (i + 1) % report_freq == 0:
+#         print(np.mean(loss))
+#     if np.mean(loss) / 2 < min_loss:
+#         torch.save(model.state_dict(), 'model.pkl')
+#         min_loss = np.mean(loss)
+
+# for epoch in range(100000):
+#     x = []
+#     y = []
+#
+#     order = np.random.permutation([0, 1, 2, 3])
+#     for j in order:
+#         # string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
+#         string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
+#         x.append(string_x)
+#         y.append(string_y)
+#     x = np.hstack(x)
+#     y = np.hstack(y)
+#     x = torch.from_numpy(x.astype(np.float32))
+#     y = torch.from_numpy(y.astype(np.float32))
+#     _loss = train_ntm(model, x, y, optimizer, criterion)
+#
+#     if (epoch + 1) % report_freq == 0:
+#         print(_loss)
+#     if _loss < min_loss:
+#         torch.save(model.state_dict(), 'model.pkl')
+#         min_loss = np.mean(_loss)
+
+# x = []
+# y = []
+# order = np.random.permutation([0, 1, 2, 3])
+# l = []
+# for j in order:
+#     _l = np.random.randint(10, 50)
+#     l.append(_l)
+#     string_x, string_y = get_data(1, _l, models[j], j + 4)
+#     x.append(string_x)
+#     y.append(string_y)
+# x = np.hstack(x)
+# y = np.hstack(y)
+# x = torch.from_numpy(x.astype(np.float32))
+# y = torch.from_numpy(y.astype(np.float32))
+# pred = model(x, y)
+# gate = torch.cat(model.gate_trajectory).data.numpy()[:, 0, :]
+# pred = pred > 0.5
+# print(pred == (y > 0.5))
+#
+# grand_truth = np.zeros((x.shape[1], 4))
+# prev = 0
+# grand_truth[prev:prev + l[0], 0] = 1
+# prev += l[0]
+# grand_truth[prev:prev + l[1], 1] = 1
+# prev += l[1]
+# grand_truth[prev:prev + l[2], 2] = 1
+# prev += l[2]
+# grand_truth[prev:prev + l[3], 3] = 1
+#
+# plt.title('grand truth')
+# plt.plot(grand_truth)
+# plt.show()
+#
+# plt.title('result')
+# plt.plot(gate)
+# plt.show()
+
+
+criterion = torch.nn.MSELoss()
+optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, discmaker.parameters()),
+                             lr=0.01, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+min_loss = 1
 report_freq = 50
-min_loss = 0.01
+for epoch in range(100000):
+    x = []
+    y = []
 
-models = torch.nn.ModuleList()
-for i in [0, 1, 2, 3]:
-    _m = KAARMA(4, 1, 2, 2)
-    _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
-    _m.eval()
-    models.append(_m)
+    order = np.random.permutation([2])
+    for j in order:
+        string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
+        # string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
+        x.append(string_x)
+        y.append(string_y)
+    x = np.hstack(x)
+    y = np.hstack(y)
+    x = torch.from_numpy(x.astype(np.float32))
+    y = torch.from_numpy(y.astype(np.float32))
+    _loss = train(discmaker, x, y, criterion, optimizer)
 
-for i in range(epochs):
-    loss = []
-    for j in [0, 1, 2, 3]:
-        length = np.random.randint(3, 100)
-        x, y = get_data(1, length, models[j], j + 4)
-        x = torch.from_numpy(x.astype(np.float32))
-        y = torch.from_numpy(y.astype(np.float32))
-        _loss = train_ntm(model, x, y, optimizer, criterion)
-        loss.append(_loss)
-    if (i + 1) % report_freq == 0:
-        print(np.mean(loss))
-    if np.mean(loss) / 2 < min_loss:
-        torch.save(model.state_dict(), 'model.pkl')
-        min_loss = np.mean(loss)
-
-j = 1
-x, y = get_data(1, 100, models[j], j + 4)
-x = torch.from_numpy(x.astype(np.float32))
-y = torch.from_numpy(y.astype(np.float32))
-model(x, y)
-gate = torch.cat(model.gate_trajectory).data.numpy()[:, 0, :]
+    if (epoch + 1) % report_freq == 0:
+        print(_loss)
+    if _loss < min_loss:
+        torch.save(discmaker.state_dict(), 'model.pkl')
+        min_loss = np.mean(_loss)
+print(discmaker.gate_trajectories)
+np.save('gates.npy', discmaker.gate_trajectories)

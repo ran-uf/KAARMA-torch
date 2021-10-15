@@ -97,7 +97,7 @@ class NTMWriteHead(NTMHeadBase):
         super(NTMWriteHead, self).__init__(memory, controller_size)
 
         # Corresponding to k, β, g, s, γ, e, a sizes from the paper
-        self.write_lengths = [self.M, 1, 1, 3, 1, self.M]
+        self.write_lengths = [self.M, 1, 1, 3, 1, self.M, self.M]
         self.fc_write = nn.Linear(controller_size, sum(self.write_lengths))
         self.reset_parameters()
 
@@ -112,20 +112,20 @@ class NTMWriteHead(NTMHeadBase):
     def is_read_head(self):
         return False
 
-    def forward(self, x, w_prev):
+    def forward(self, embeddings, w_prev):
         """NTMWriteHead forward function.
-        :param x: input representation of the controller.
+
+        :param embeddings: input representation of the controller.
         :param w_prev: previous step state
         """
-        embeddings, content = x
         o = self.fc_write(embeddings)
-        k, β, g, s, γ, e = _split_cols(o, self.write_lengths)
+        k, β, g, s, γ, e, a = _split_cols(o, self.write_lengths)
 
         # e should be in [0, 1]
-        e = torch.sigmoid(e)
+        e = F.sigmoid(e)
 
         # Write to memory
         w = self._address_memory(k, β, g, s, γ, w_prev)
-        self.memory.write(w, e, content)
+        self.memory.write(w, e, a)
 
         return w

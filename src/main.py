@@ -11,15 +11,15 @@ tomita_type = 7
 model = KAARMA(4, 1, 2, 2)
 model.node.load_state_dict(torch.load('../model/%d.pkl' % tomita_type))
 model.eval()
+np.random.seed(2)
+strings, desires = generate_tomita_sequence(100, 2000, tomita_type)
 
-strings, desires = generate_tomita_sequence(1, 200, tomita_type)
-
-res, state_trajectory = model(strings[0], True)
+res, state_trajectory = model(strings, True)
 res = res > 0.5
-print(res == desires)
-X_reduced = PCA(n_components=2).fit_transform(state_trajectory)
-plt.scatter(X_reduced[:, 0], X_reduced[:, 1])
-plt.show()
-kmeans = KMeans(n_clusters=7).fit(state_trajectory)
-
-np.save('../trajectory/%d.npy' % tomita_type, kmeans.cluster_centers_)
+print(np.sum(res.data.numpy() == desires))
+# X_reduced = PCA(n_components=2).fit_transform(state_trajectory)
+# plt.scatter(X_reduced[:, 0], X_reduced[:, 1])
+# plt.show()
+# kmeans = KMeans(n_clusters=7).fit(state_trajectory)
+#
+# np.save('../trajectory/%d.npy' % tomita_type, kmeans.cluster_centers_)

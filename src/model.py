@@ -94,7 +94,7 @@ class NTMCell(nn.Module):
 
     def init_states(self):
         if not next(self.parameters()).is_cuda:
-            return (None, None, [torch.zeros((1, self.N))], torch.Tensor([[0.25, 0.25, 0.25, 0.25]])), \
+            return (None, None, [torch.zeros((1, self.N))], torch.Tensor([[0.25, 0.25, 0.25, .25]])), \
                    torch.from_numpy(np.array([[0.]], dtype=np.float32))
         else:
             return (None, None, [torch.zeros((1, self.N)).cuda(), torch.zeros((1, 100)).cuda()], 0.25 * torch.ones((1, 4)).cuda()), \
