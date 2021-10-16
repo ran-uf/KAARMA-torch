@@ -20,8 +20,8 @@ def myloss(x, y):
 
 def get_data(batch_size, length, m, tomita_type):
     s, _ = generate_tomita_sequence(batch_size, length, tomita_type)
-    _y, _ = m(s[0], True)
-    return s, _y[np.newaxis, :]
+    _y, _ = m(s, True)
+    return s, _y.data.numpy()
 
 
 def train(model, train_x, train_y, cri, optim):
@@ -45,12 +45,15 @@ trajectories = np.vstack(trajectories)
 trajectories = torch.from_numpy(trajectories)
 decoder = MKAARMACell(models, trajectories).eval()
 
-controller = LSTMController(121, 100, 2)
-memory = NTMMemory(100, 20, None)
-readhead = NTMReadHead(memory, 100)
-writehead = NTMWriteHead(memory, 100)
+m = 20
+n = 128
+controller_size = 100
+controller = LSTMController(21 + m, controller_size, 2)
+memory = NTMMemory(n, m, None)
+readhead = NTMReadHead(memory, controller_size)
+writehead = NTMWriteHead(memory, controller_size)
 heads = torch.nn.ModuleList([readhead, writehead])
-ntm = NTM(25, 4, controller, memory, heads)
+ntm = NTM(25, 25, controller, memory, heads)
 
 discmaker = DiscMaker(decoder, ntm)
 
@@ -90,12 +93,12 @@ discmaker = DiscMaker(decoder, ntm)
 # report_freq = 50
 # min_loss = 0.01
 #
-# models = torch.nn.ModuleList()
-# for i in [0, 1, 2, 3]:
-#     _m = KAARMA(4, 1, 2, 2)
-#     _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
-#     _m.eval()
-#     models.append(_m)
+models = torch.nn.ModuleList()
+for i in [0, 1, 2, 3]:
+    _m = KAARMA(4, 1, 2, 2)
+    _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
+    _m.eval()
+    models.append(_m)
 
 # for i in range(epochs):
 #     loss = []
@@ -175,23 +178,25 @@ discmaker = DiscMaker(decoder, ntm)
 
 criterion = torch.nn.MSELoss()
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, discmaker.parameters()),
-                             lr=0.01, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+                             lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
 min_loss = 1
-report_freq = 50
+report_freq = 500
 for epoch in range(100000):
     x = []
     y = []
 
-    order = np.random.permutation([2])
+    order = np.random.permutation([0, 1, 2, 3])
     for j in order:
         string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
         # string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
         x.append(string_x)
         y.append(string_y)
-    x = np.hstack(x)
-    y = np.hstack(y)
-    x = torch.from_numpy(x.astype(np.float32))
-    y = torch.from_numpy(y.astype(np.float32))
+    # x = np.hstack(x)
+    # y = np.hstack(y)
+    # x = torch.from_numpy(x.astype(np.float32))
+    # y = torch.from_numpy(y.astype(np.float32))
+    x = torch.from_numpy(string_x.astype(np.float32))
+    y = torch.from_numpy(string_y.astype(np.float32))
     _loss = train(discmaker, x, y, criterion, optimizer)
 
     if (epoch + 1) % report_freq == 0:
@@ -199,5 +204,18 @@ for epoch in range(100000):
     if _loss < min_loss:
         torch.save(discmaker.state_dict(), 'model.pkl')
         min_loss = np.mean(_loss)
-print(discmaker.gate_trajectories)
 np.save('gates.npy', discmaker.gate_trajectories)
+
+j = 0
+string_x, string_y = get_data(1, 100, models[j], j + 4)
+string_x = torch.from_numpy(string_x.astype(np.float32))
+string_y = torch.from_numpy(string_y.astype(np.float32))
+pred = discmaker(string_x, string_y)
+gate = torch.stack(discmaker.gate_trajectories, dim=1)
+plt.title('result grammar #%d' % (j + 4))
+plt.plot(gate.data.numpy()[0])
+plt.legend(['4', '5', '6', '7'])
+plt.show()
+
+# print(gate.data.numpy()[0])
+torch.save(discmaker.state_dict(), 'model.pkl')

@@ -39,6 +39,8 @@ class DiscMaker(torch.nn.Module):
         self.mkaarma = mkaarma
         self.controller = controller
         self.gate_trajectories = None
+        self.linear_encode = torch.nn.Linear(100, 20)
+        self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, 4)
 
     def forward(self, x, y):
         self.gate_trajectories = []
@@ -48,13 +50,19 @@ class DiscMaker(torch.nn.Module):
         self.controller.memory.reset(x.shape[0])
         error = torch.zeros(x.shape[0])
         o = []
+        gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
+            encoded = self.linear_encode(encoded)
             inp = torch.cat([encoded, error.unsqueeze(1)], dim=1)
-            gate, controller_state = self.controller(inp, controller_state)
+            controller_output, controller_state = self.controller(inp, controller_state)
+            gate = self.linear_decode(controller_output[:, :-1])
             gate = torch.softmax(gate, dim=1)
+            theta = torch.sigmoid(controller_output[:, -1])
+            gate = theta * gate + (1 - theta) * gate_state
             self.gate_trajectories.append(gate)
             kaarma_state = torch.matmul(gate, new_state)[:, 0, :]
+            gate_state = gate
             pred = kaarma_state[:, -1]
             error = pred - y[:, i]
             o.append(pred)
