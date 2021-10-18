@@ -7,6 +7,7 @@ from src.NTM.ntm import NTM
 from src.mKAARMA import MKAARMACell, DiscMaker
 from src.NTM.head import NTMReadHead, NTMWriteHead
 from src.KAARMA import KernelNode as BaseModel
+from src.kernel import Kernel
 
 from src.tomita import generate_tomita_sequence
 from src.KAARMA import KAARMA
@@ -52,13 +53,16 @@ def train_single_seq(model, models, ls, epochs, freq_rep, cri, optim):
 
 
 models = torch.nn.ModuleList()
-trajectories = []
+# trajectories = []
+trajectories = torch.nn.ModuleList()
 for i in [4, 5, 6, 7]:
     m = BaseModel(4, 1, 2, 2)
     m.load_state_dict(torch.load('model/%d.pkl' % i))
     m.requires_grad_(False)
     models.append(m)
-    trajectories.append(torch.from_numpy(np.load('trajectory/%d.npy' % i).astype(np.float32)))
+    tra = np.load('trajectory/%d.npy' % i).astype(np.float32)
+    trajectories.append(Kernel(tra.shape[0], tra.shape[1], 10, tra))
+    # trajectories.append(torch.from_numpy(np.load('trajectory/%d.npy' % i).astype(np.float32)))
 # trajectories = np.vstack(trajectories)
 # trajectories = torch.from_numpy(trajectories)
 decoder = MKAARMACell(models, trajectories).eval()
@@ -73,8 +77,11 @@ writehead = NTMWriteHead(memory, controller_size)
 heads = torch.nn.ModuleList([readhead, writehead])
 ntm = NTM(25, 25, controller, memory, heads)
 
-discmaker = DiscMaker(decoder, ntm)
 
+device = "cuda"
+discmaker = DiscMaker(decoder, ntm).to(device)
+for tra in discmaker.mkaarma.trajectories:
+    tra.to(device)
 
 # def train_step(network, train_x, train_y, opt, cri):
 #     opt.zero_grad()
@@ -170,16 +177,16 @@ for epoch in range(100000):
     avg_loss = []
     order = np.random.permutation([0, 1, 2, 3])
     for j in order:
-        string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
-        # string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
+        # string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
+        string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
         # .append(string_x)
         # y.append(string_y)
     # x = np.hstack(x)
     # y = np.hstack(y)
     # x = torch.from_numpy(x.astype(np.float32))
     # y = torch.from_numpy(y.astype(np.float32))
-        x = torch.from_numpy(string_x.astype(np.float32))
-        y = torch.from_numpy(string_y.astype(np.float32))
+        x = torch.from_numpy(string_x.astype(np.float32)).to(device)
+        y = torch.from_numpy(string_y.astype(np.float32)).to(device)
         # scheduler.step()
         _loss = train(discmaker, x, y, criterion, optimizer)
         avg_loss.append(_loss)
@@ -192,7 +199,8 @@ for epoch in range(100000):
 np.save('gates.npy', discmaker.gate_trajectories)
 
 j = 2
-string_x, string_y = get_data(1, 100, models[j], j + 4)
+string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
+# string_x, string_y = get_data(1, 100, models[j], j + 4)
 string_x = torch.from_numpy(string_x.astype(np.float32))
 string_y = torch.from_numpy(string_y.astype(np.float32))
 pred = discmaker(string_x, string_y)
@@ -203,4 +211,4 @@ plt.legend(['4', '5', '6', '7'])
 plt.show()
 
 # print(gate.data.numpy()[0])
-torch.save(discmaker.state_dict(), 'model.pkl')
+torch.save(discmaker.state_dict(), 'model_real.pkl')

@@ -12,12 +12,13 @@ class MKAARMACell(torch.nn.Module):
     def similarity(self, s, idx):
         batch_size = s.shape[0]
         r = []
-        for _s in s:
-            _r = (self.trajectories[idx] - _s.repeat(self.trajectories[idx].shape[0], 1)) ** 2
-            _r = torch.sum(_r, dim=1)
-            _r = torch.exp(-self.similarity_size * _r)
-            r.append(_r)
-        return torch.stack(r, dim=0)
+        # for _s in s:
+        #     _r = (self.trajectories[idx] - _s.repeat(self.trajectories[idx].shape[0], 1)) ** 2
+        #     _r = torch.sum(_r, dim=1)
+        #     _r = torch.exp(-self.similarity_size * _r)
+        #     r.append(_r)
+        # return torch.stack(r, dim=0)
+        return self.trajectories[idx](s)
 
     def forward(self, phi, state):
         new_state = []
@@ -40,17 +41,20 @@ class DiscMaker(torch.nn.Module):
         self.gate_trajectories = None
         # self.linear_encode = torch.nn.Linear(100, 20)
         self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, 4)
+        self.register_buffer('init_error', torch.zeros(1))
+        self.register_buffer('init_gate', torch.Tensor([[0.25, 0.25, 0.25, 0.25]]))
 
     def forward(self, x, y):
         self.gate_trajectories = []
         seq_len = x.shape[1]
         kaarma_state = None
-        controller_state = self.controller.create_new_state(x.shape[0])
+        controller_state = self.controller.create_new_state(x.shape[0], next(self.parameters()).device)
         self.controller.memory.reset(x.shape[0])
 
-        error = torch.zeros(x.shape[0])
+        error = self.init_error.repeat(x.shape[0])
         o = []
-        gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
+        gate_state = self.init_gate.repeat(x.shape[0], 1)
+        # gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
             # kaarma_state = torch.matmul(gate_state, new_state)[:, 0, :]
