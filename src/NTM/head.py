@@ -122,7 +122,7 @@ class NTMWriteHead(NTMHeadBase):
         k, β, g, s, γ, e, a = _split_cols(o, self.write_lengths)
 
         # e should be in [0, 1]
-        e = F.sigmoid(e)
+        e = torch.sigmoid(e)
 
         # Write to memory
         w = self._address_memory(k, β, g, s, γ, w_prev)

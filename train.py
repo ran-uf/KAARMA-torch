@@ -33,6 +33,24 @@ def train(model, train_x, train_y, cri, optim):
     return loss.cpu().data.numpy()
 
 
+def train_single_seq(model, models, ls, epochs, freq_rep, cri, optim):
+    min_loss = 1
+    for epoch in range(epochs):
+        tp = np.random.choice(ls)
+        # string_x, string_y = get_data(1, np.random.randint(10, 50), models[tp], tp + 4)
+        string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), tp + 4)
+
+        x = torch.from_numpy(string_x.astype(np.float32))
+        y = torch.from_numpy(string_y.astype(np.float32))
+        _loss = train(model, x, y, cri, optim)
+
+        if (epoch + 1) % freq_rep == 0:
+            print(_loss)
+        if _loss < min_loss:
+            torch.save(model.state_dict(), 'model.pkl')
+            min_loss = np.mean(_loss)
+
+
 models = torch.nn.ModuleList()
 trajectories = []
 for i in [4, 5, 6, 7]:
@@ -40,15 +58,15 @@ for i in [4, 5, 6, 7]:
     m.load_state_dict(torch.load('model/%d.pkl' % i))
     m.requires_grad_(False)
     models.append(m)
-    trajectories.append(np.load('trajectory/%d.npy' % i))
-trajectories = np.vstack(trajectories)
-trajectories = torch.from_numpy(trajectories)
+    trajectories.append(torch.from_numpy(np.load('trajectory/%d.npy' % i).astype(np.float32)))
+# trajectories = np.vstack(trajectories)
+# trajectories = torch.from_numpy(trajectories)
 decoder = MKAARMACell(models, trajectories).eval()
 
 m = 20
-n = 128
+n = 32
 controller_size = 100
-controller = LSTMController(21 + m, controller_size, 2)
+controller = LSTMController(26 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
 readhead = NTMReadHead(memory, controller_size)
 writehead = NTMWriteHead(memory, controller_size)
@@ -100,44 +118,6 @@ for i in [0, 1, 2, 3]:
     _m.eval()
     models.append(_m)
 
-# for i in range(epochs):
-#     loss = []
-#     for j in [0, 1, 2, 3]:
-#         length = np.random.randint(3, 100)
-#         # x, y = get_data(1, length, models[j], j + 4)
-#         x, y = generate_tomita_sequence(1, length, j + 4)
-#         x = torch.from_numpy(x.astype(np.float32))
-#         y = torch.from_numpy(y.astype(np.float32))
-#         _loss = train_ntm(model, x, y, optimizer, criterion)
-#         loss.append(_loss)
-#     if (i + 1) % report_freq == 0:
-#         print(np.mean(loss))
-#     if np.mean(loss) / 2 < min_loss:
-#         torch.save(model.state_dict(), 'model.pkl')
-#         min_loss = np.mean(loss)
-
-# for epoch in range(100000):
-#     x = []
-#     y = []
-#
-#     order = np.random.permutation([0, 1, 2, 3])
-#     for j in order:
-#         # string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
-#         string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
-#         x.append(string_x)
-#         y.append(string_y)
-#     x = np.hstack(x)
-#     y = np.hstack(y)
-#     x = torch.from_numpy(x.astype(np.float32))
-#     y = torch.from_numpy(y.astype(np.float32))
-#     _loss = train_ntm(model, x, y, optimizer, criterion)
-#
-#     if (epoch + 1) % report_freq == 0:
-#         print(_loss)
-#     if _loss < min_loss:
-#         torch.save(model.state_dict(), 'model.pkl')
-#         min_loss = np.mean(_loss)
-
 # x = []
 # y = []
 # order = np.random.permutation([0, 1, 2, 3])
@@ -178,35 +158,40 @@ for i in [0, 1, 2, 3]:
 
 criterion = torch.nn.MSELoss()
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, discmaker.parameters()),
-                             lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
+                             lr=0.0001, betas=(0.9, 0.999), eps=1e-08)
+# optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, discmaker.parameters()), lr=0.01)
 min_loss = 1
-report_freq = 500
+report_freq = 100
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=5, eta_min=0)
+# train_single_seq(discmaker, models, [0, 1, 2, 3], 100000, report_freq, criterion, optimizer)
 for epoch in range(100000):
     x = []
     y = []
-
+    avg_loss = []
     order = np.random.permutation([0, 1, 2, 3])
     for j in order:
         string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
         # string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
-        x.append(string_x)
-        y.append(string_y)
+        # .append(string_x)
+        # y.append(string_y)
     # x = np.hstack(x)
     # y = np.hstack(y)
     # x = torch.from_numpy(x.astype(np.float32))
     # y = torch.from_numpy(y.astype(np.float32))
-    x = torch.from_numpy(string_x.astype(np.float32))
-    y = torch.from_numpy(string_y.astype(np.float32))
-    _loss = train(discmaker, x, y, criterion, optimizer)
+        x = torch.from_numpy(string_x.astype(np.float32))
+        y = torch.from_numpy(string_y.astype(np.float32))
+        # scheduler.step()
+        _loss = train(discmaker, x, y, criterion, optimizer)
+        avg_loss.append(_loss)
 
     if (epoch + 1) % report_freq == 0:
-        print(_loss)
-    if _loss < min_loss:
+        print(np.mean(avg_loss))
+    if np.mean(avg_loss) < min_loss:
         torch.save(discmaker.state_dict(), 'model.pkl')
-        min_loss = np.mean(_loss)
+        min_loss = np.mean(avg_loss)
 np.save('gates.npy', discmaker.gate_trajectories)
 
-j = 0
+j = 2
 string_x, string_y = get_data(1, 100, models[j], j + 4)
 string_x = torch.from_numpy(string_x.astype(np.float32))
 string_y = torch.from_numpy(string_y.astype(np.float32))

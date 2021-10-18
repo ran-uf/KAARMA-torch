@@ -6,30 +6,29 @@ class MKAARMACell(torch.nn.Module):
         super(MKAARMACell, self).__init__()
         self.models = models
         self.trajectories = trajectories
-        self.similarity_size = 1
-        self.n_trajectories = trajectories.shape[0]
+        self.similarity_size = 10
+        # self.n_trajectories = trajectories.shape[0]
 
-    def similarity(self, s):
+    def similarity(self, s, idx):
         batch_size = s.shape[0]
-        num_models = s.shape[1]
         r = []
         for _s in s:
-            rr = []
-            for __s in _s:
-                _r = (self.trajectories - __s.repeat(self.n_trajectories, 1)) ** 2
-                _r = torch.sum(_r, dim=1)
-                _r = torch.exp(-self.similarity_size * _r)
-                rr.append(_r)
-            r.append(torch.stack(rr, dim=0))
+            _r = (self.trajectories[idx] - _s.repeat(self.trajectories[idx].shape[0], 1)) ** 2
+            _r = torch.sum(_r, dim=1)
+            _r = torch.exp(-self.similarity_size * _r)
+            r.append(_r)
         return torch.stack(r, dim=0)
 
     def forward(self, phi, state):
         new_state = []
-        for m in self.models:
+        output = []
+        for idx, m in enumerate(self.models):
             _, _state = m(phi, state)
             new_state.append(_state)
+            output.append(self.similarity(_state, idx))
         new_state = torch.stack(new_state, dim=1)
-        output = self.similarity(new_state)
+        # output = self.similarity(new_state)
+        output = torch.cat(output, dim=1)
         return output.view(phi.shape[0], -1), new_state
 
 
@@ -39,7 +38,7 @@ class DiscMaker(torch.nn.Module):
         self.mkaarma = mkaarma
         self.controller = controller
         self.gate_trajectories = None
-        self.linear_encode = torch.nn.Linear(100, 20)
+        # self.linear_encode = torch.nn.Linear(100, 20)
         self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, 4)
 
     def forward(self, x, y):
@@ -48,12 +47,14 @@ class DiscMaker(torch.nn.Module):
         kaarma_state = None
         controller_state = self.controller.create_new_state(x.shape[0])
         self.controller.memory.reset(x.shape[0])
+
         error = torch.zeros(x.shape[0])
         o = []
         gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
-            encoded = self.linear_encode(encoded)
+            # kaarma_state = torch.matmul(gate_state, new_state)[:, 0, :]
+            # encoded = self.linear_encode(encoded)
             inp = torch.cat([encoded, error.unsqueeze(1)], dim=1)
             controller_output, controller_state = self.controller(inp, controller_state)
             gate = self.linear_decode(controller_output[:, :-1])
@@ -66,6 +67,7 @@ class DiscMaker(torch.nn.Module):
             pred = kaarma_state[:, -1]
             error = pred - y[:, i]
             o.append(pred)
+
         return torch.stack(o, dim=1)
 
 
