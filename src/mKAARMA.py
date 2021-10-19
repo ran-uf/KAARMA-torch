@@ -40,9 +40,9 @@ class DiscMaker(torch.nn.Module):
         self.controller = controller
         self.gate_trajectories = None
         # self.linear_encode = torch.nn.Linear(100, 20)
-        self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, 4)
+        self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, 3)
         self.register_buffer('init_error', torch.zeros(1))
-        self.register_buffer('init_gate', torch.Tensor([[0.25, 0.25, 0.25, 0.25]]))
+        self.register_buffer('init_gate', torch.Tensor([[0.33, 0.33, 0.34]]))
 
     def forward(self, x, y):
         self.gate_trajectories = []
@@ -66,7 +66,7 @@ class DiscMaker(torch.nn.Module):
             theta = torch.sigmoid(controller_output[:, -1]).unsqueeze(1)
             gate = gate * theta + gate_state * (1 - theta)
             self.gate_trajectories.append(gate)
-            kaarma_state = torch.matmul(gate, new_state)[:, 0, :]
+            kaarma_state = torch.bmm(gate.unsqueeze(1), new_state)[:, 0, :]
             gate_state = gate
             pred = kaarma_state[:, -1]
             error = pred - y[:, i]
