@@ -78,7 +78,7 @@ heads = torch.nn.ModuleList([readhead, writehead])
 ntm = NTM(25, 25, controller, memory, heads)
 
 
-device = "cuda"
+device = "cpu"
 discmaker = DiscMaker(decoder, ntm).to(device)
 for tra in discmaker.mkaarma.trajectories:
     tra.to(device)
@@ -178,7 +178,7 @@ for epoch in range(100000):
     order = np.random.permutation([0, 1, 2, 3])
     for j in order:
         # string_x, string_y = get_data(1, np.random.randint(10, 50), models[j], j + 4)
-        string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), j + 4)
+        string_x, string_y = generate_tomita_sequence(16, np.random.randint(10, 50), j + 4)
         # .append(string_x)
         # y.append(string_y)
     # x = np.hstack(x)
@@ -194,7 +194,7 @@ for epoch in range(100000):
     if (epoch + 1) % report_freq == 0:
         print(np.mean(avg_loss))
     if np.mean(avg_loss) < min_loss:
-        torch.save(discmaker.state_dict(), 'model.pkl')
+        torch.save(discmaker.state_dict(), 'model_grand_true.pkl')
         min_loss = np.mean(avg_loss)
 np.save('gates.npy', discmaker.gate_trajectories)
 

@@ -63,8 +63,8 @@ class DiscMaker(torch.nn.Module):
             controller_output, controller_state = self.controller(inp, controller_state)
             gate = self.linear_decode(controller_output[:, :-1])
             gate = torch.softmax(gate, dim=1)
-            theta = torch.sigmoid(controller_output[:, -1])
-            gate = theta * gate + (1 - theta) * gate_state
+            theta = torch.sigmoid(controller_output[:, -1]).unsqueeze(1)
+            gate = gate * theta + gate_state * (1 - theta)
             self.gate_trajectories.append(gate)
             kaarma_state = torch.matmul(gate, new_state)[:, 0, :]
             gate_state = gate
