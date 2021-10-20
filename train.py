@@ -20,6 +20,7 @@ from optparse import OptionParser
 parser = OptionParser()
 parser.add_option("--batch_size", type="int", dest="batch_size", default=1)
 parser.add_option("--device", type="str", dest="device", default="cpu")
+parser.add_option("--epochs", type="int", dest="epochs", default=100000)
 (options, args) = parser.parse_args()
 
 
@@ -172,7 +173,7 @@ min_loss = 1
 report_freq = 100
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=5, eta_min=0)
 # train_single_seq(discmaker, models, [0, 1, 2, 3], 100000, report_freq, criterion, optimizer)
-for epoch in range(15000):
+for epoch in range(options.epochs):
     print('\r', epoch, end='', flush=True)
     x = []
     y = []
