@@ -76,7 +76,7 @@ for i in [4, 5, 6]:
 decoder = MKAARMACell(models, trajectories).eval()
 
 m = 20
-n = 32
+n = 128
 controller_size = 100
 controller = LSTMController(19 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
@@ -153,16 +153,26 @@ for i in [0, 1, 2]:
 # plt.plot(gate)
 # plt.show()
 
+test_x = []
+test_y = []
+for i in range(3):
+    _x, _y = generate_tomita_sequence(64, 128, i + 4)
+    test_x.append(_x)
+    test_y.append(_y)
+test_x = np.vstack(test_x)
+test_y = np.vstack(test_y)
+test_x = torch.from_numpy(test_x.astype(np.float32)).to(device)
+test_y = torch.from_numpy(test_y.astype(np.float32)).to(device)
 
 criterion = torch.nn.MSELoss()
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, discmaker.parameters()),
-                             lr=0.0001, betas=(0.9, 0.999), eps=1e-08)
+                             lr=0.001, betas=(0.9, 0.999), eps=1e-08)
 # optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, discmaker.parameters()), lr=0.0001)
 min_loss = 1
 report_freq = 100
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=5, eta_min=0)
 # train_single_seq(discmaker, models, [0, 1, 2, 3], 100000, report_freq, criterion, optimizer)
-for epoch in range(100000):
+for epoch in range(15000):
     print('\r', epoch, end='', flush=True)
     x = []
     y = []
@@ -186,11 +196,17 @@ for epoch in range(100000):
 
     if (epoch + 1) % report_freq == 0:
         print('\r', np.mean(avg_loss))
-    if np.mean(avg_loss) < min_loss:
-        torch.save(discmaker.state_dict(), 'model_grand_true.pkl')
-        min_loss = np.mean(avg_loss)
-        print('\r', 'new model saved, min_loss: %f' % min_loss)
-np.save('gates.npy', discmaker.gate_trajectories)
+
+    if epoch > 10000:
+        if (epoch + 1) % report_freq == 0:
+            pred = discmaker(test_x, test_y)
+            test_loss = torch.mean((test_y - pred) ** 2)
+            print('\r', 'loss test: %f' % test_loss)
+            if test_loss < min_loss:
+                torch.save(discmaker.state_dict(), 'model_grand_true.pkl')
+                min_loss = test_loss
+                print('\r', 'new model saved, min_loss: %f' % test_loss)
+
 
 for j in range(3):
     string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
