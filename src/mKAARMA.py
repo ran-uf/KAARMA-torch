@@ -41,8 +41,9 @@ class DiscMaker(torch.nn.Module):
         self.gate_trajectories = None
         # self.linear_encode = torch.nn.Linear(100, 20)
         self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, 3)
-        self.register_buffer('init_error', torch.zeros(1))
-        self.register_buffer('init_gate', torch.Tensor([[0.33, 0.33, 0.34]]))
+        self.register_buffer('init_error', torch.ones(1))
+        self.register_buffer('init_gate', torch.Tensor([[0.3333, 0.3333, 0.3334]]))
+        # self.register_buffer('init_gate', torch.softmax(torch.rand((1, 3)), dim=1))
 
     def forward(self, x, y):
         self.gate_trajectories = []
