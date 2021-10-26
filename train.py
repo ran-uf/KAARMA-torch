@@ -77,7 +77,7 @@ for i in [4, 5, 6]:
 decoder = MKAARMACell(models, trajectories).eval()
 
 m = 20
-n = 32
+n = 128
 controller_size = 50
 controller = LSTMController(19 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
@@ -179,7 +179,7 @@ for epoch in range(options.epochs):
     y = []
     avg_loss = []
     order = np.random.permutation([0, 1, 2])
-    length = np.random.randint(10, 50)
+    length = np.random.randint(40, 80)
     for j in order:
         string_x, string_y = get_data(options.batch_size, length, models[j], j + 4)
         # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
@@ -210,17 +210,17 @@ for epoch in range(options.epochs):
     # scheduler.step()
 
 
-for j in range(3):
-    # string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
-    string_x, string_y = get_data(1, 100, models[j], j + 4)
-    string_x = torch.from_numpy(string_x.astype(np.float32))
-    string_y = torch.from_numpy(string_y.astype(np.float32))
-    pred = discmaker(string_x, string_y)
-    gate = torch.stack(discmaker.gate_trajectories, dim=1)
-    plt.title('result grammar #%d' % (j + 4))
-    plt.plot(gate.data.numpy()[0])
-    plt.legend(['4', '5', '6'])
-    plt.show()
+# for j in range(3):
+#     # string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
+#     string_x, string_y = get_data(1, 100, models[j], j + 4)
+#     string_x = torch.from_numpy(string_x.astype(np.float32))
+#     string_y = torch.from_numpy(string_y.astype(np.float32))
+#     pred = discmaker(string_x, string_y)
+#     gate = torch.stack(discmaker.gate_trajectories, dim=1)
+#     plt.title('result grammar #%d' % (j + 4))
+#     plt.plot(gate.data.numpy()[0])
+#     plt.legend(['4', '5', '6'])
+#     plt.show()
 
 # print(gate.data.numpy()[0])
 torch.save(discmaker.state_dict(), 'model_real.pkl')

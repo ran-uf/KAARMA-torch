@@ -55,9 +55,9 @@ class DiscMaker(torch.nn.Module):
         error = self.init_error.repeat(x.shape[0])
         o = []
         # gate_state = self.init_gate.repeat(x.shape[0], 1)
-        gate_state = torch.randn((x.shape[0], 3))
-        gate_state = torch.softmax(gate_state, dim=1).to(next(self.parameters()).device)
-        # gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
+        gate_state = torch.zeros((x.shape[0], 3))
+        gate_state[:, torch.randint(3, (1,))] = 1
+        gate_state = gate_state.to(next(self.parameters()).device)        # gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
             # kaarma_state = torch.matmul(gate_state, new_state)[:, 0, :]

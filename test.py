@@ -17,6 +17,19 @@ import matplotlib.pyplot as plt
 from optparse import OptionParser
 
 
+def plot_ground_truth(num_gates, odr, lens):
+    gs = np.zeros((num_gates, np.sum(lens)))
+    s = 0
+    for g, l in zip(odr, lens):
+        gs[g, s: s + l] = 1
+        s = s + l
+
+    plt.title('ground truth')
+    plt.plot(gs.T)
+    plt.legend(['4', '5', '6'])
+    plt.show()
+
+
 parser = OptionParser()
 parser.add_option("--batch_size", type="int", dest="batch_size", default=1)
 parser.add_option("--device", type="str", dest="device", default="cpu")
@@ -58,7 +71,7 @@ ntm = NTM(25, 25, controller, memory, heads)
 
 device = options.device
 discmaker = DiscMaker(decoder, ntm)
-discmaker.load_state_dict(torch.load("model_rand_gate.pkl"))
+discmaker.load_state_dict(torch.load("test.pkl"))
 discmaker.to(device)
 for tra in discmaker.mkaarma.trajectories:
     tra.to(device)
@@ -73,8 +86,11 @@ for i in [0, 1, 2]:
 order = [1, 2, 0]
 x = []
 y = []
-for j in [0, 2, 2, 2, 2, 2]:
-    string_x, string_y = get_data(1, 100, models[j], j + 4)
+lengths = []
+for j in order:
+    length = np.random.randint(40, 100)
+    lengths.append(length)
+    string_x, string_y = get_data(1, length, models[j], j + 4)
     # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
     x.append(string_x)
     y.append(string_y)
@@ -84,3 +100,8 @@ x = torch.from_numpy(x.astype(np.float32))
 y = torch.from_numpy(y.astype(np.float32))
 pred = discmaker(x, y)
 gate = torch.vstack(discmaker.gate_trajectories).detach().numpy()
+
+plot_ground_truth(3, order, lengths)
+
+plt.plot(gate)
+plt.show()
