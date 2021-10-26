@@ -180,13 +180,13 @@ for epoch in range(options.epochs):
     avg_loss = []
     order = np.random.permutation([0, 1, 2])
     length = np.random.randint(10, 50)
-    for j in [order[0]]:
+    for j in order:
         string_x, string_y = get_data(options.batch_size, length, models[j], j + 4)
         # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
         x.append(string_x)
         y.append(string_y)
-    x = np.vstack(x)
-    y = np.vstack(y)
+    x = np.hstack(x)
+    y = np.hstack(y)
     # x = torch.from_numpy(x.astype(np.float32))
     # y = torch.from_numpy(y.astype(np.float32))
     x = torch.from_numpy(x.astype(np.float32)).to(device)
