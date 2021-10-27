@@ -66,6 +66,18 @@ class KernelNode(nn.Module):
         self.S = nn.Parameter(state_dict['S'])
         self.memory_size = self.A.shape[0]
 
+    def train(self, mode=True):
+        self.A.requires_grad = True
+        self.S.requires_grad = False
+        self.Phi.requires_grad = False
+        return self
+
+    def eval(self, mode=True):
+        self.A.requires_grad = False
+        self.S.requires_grad = False
+        self.Phi.requires_grad = False
+        return self
+
 
 class KAARMA(nn.Module):
     def __init__(self, ns, ny, _as, _au):
@@ -97,54 +109,107 @@ class KAARMA(nn.Module):
 
     def custom_train(self, x, y, lr, dq):
         for (_x, _y) in zip(x, y):
-            truncated_length = 6
-            states_0 = [None]
-            states_1 = [self.node.initial_state]
-            a = []
-            s = []
-            phi = []
-            for inp in _x:
-                state = states_1[-1].detach()
-                state.requires_grad = True
-                phi.append(inp)
-                s.append(state)
-                if len(phi) > truncated_length:
-                    del phi[0]
-                    del s[0]
-                out, new_state = self.node(inp, state)
-                states_0.append(state)
-                states_1.append(new_state)
+            self.custom_train_step(_x, _y, lr, dq)
+            # truncated_length = 6
+            # states_0 = [None]
+            # states_1 = [self.node.initial_state]
+            # a = []
+            # s = []
+            # phi = []
+            # for inp in _x:
+            #     state = states_1[-1].detach()
+            #     state.requires_grad = True
+            #     phi.append(inp)
+            #     s.append(state)
+            #     if len(phi) > truncated_length:
+            #         del phi[0]
+            #         del s[0]
+            #     out, new_state = self.node(inp, state)
+            #     states_0.append(state)
+            #     states_1.append(new_state)
+            #
+            # state = states_1[-1].detach()
+            # state.requires_grad = True
+            #
+            # # loss = self.loss(torch.mm(self.node.II, state.T), torch.Tensor([[_y]]))
+            # loss = self.loss(state[:, -1], torch.Tensor([_y]))
+            # states_0.append(state)
+            # states_1.append(loss)
+            # loss.backward(retain_graph=True)
+            # a.append(- lr * states_0[-1].grad)
+            #
+            # for i in range(len(states_0) - 3):
+            #     if states_0[-i - 2] is None:
+            #         break
+            #     curr_grad = states_0[-i-1].grad
+            #     states_1[-i - 2].backward(curr_grad, retain_graph=True)
+            #     a.append(- lr * states_0[-i-2].grad)
+            #     if len(a) >= truncated_length:
+            #         break
+            #
+            # self.node.update_memory(phi, s, a[::-1], dq)
 
+    def custom_train_step(self, x, y, lr, dq):
+        truncated_length = 6
+        states_0 = [None]
+        states_1 = [self.node.initial_state]
+        a = []
+        s = []
+        phi = []
+        for inp in x:
             state = states_1[-1].detach()
             state.requires_grad = True
-
-            loss = self.loss(torch.mm(self.node.II, state.T), torch.Tensor([[_y]]))
-
+            phi.append(inp)
+            s.append(state)
+            if len(phi) > truncated_length:
+                del phi[0]
+                del s[0]
+            out, new_state = self.node(inp, state)
             states_0.append(state)
-            states_1.append(loss)
-            loss.backward(retain_graph=True)
-            a.append(- lr * states_0[-1].grad)
+            states_1.append(new_state)
 
-            for i in range(len(states_0) - 3):
-                if states_0[-i - 2] is None:
-                    break
-                curr_grad = states_0[-i-1].grad
-                states_1[-i - 2].backward(curr_grad, retain_graph=True)
-                a.append(- lr * states_0[-i-2].grad)
-                if len(a) >= truncated_length:
-                    break
+        state = states_1[-1].detach()
+        state.requires_grad = True
 
-            self.node.update_memory(phi, s, a[::-1], dq)
+        # loss = self.loss(torch.mm(self.node.II, state.T), torch.Tensor([[_y]]))
+        loss = self.loss(state[:, -1], torch.Tensor([y]))
+        states_0.append(state)
+        states_1.append(loss)
+        loss.backward(retain_graph=True)
+        a.append(- lr * states_0[-1].grad)
+
+        for i in range(len(states_0) - 3):
+            if states_0[-i - 2] is None:
+                break
+            curr_grad = states_0[-i - 1].grad
+            states_1[-i - 2].backward(curr_grad, retain_graph=True)
+            a.append(- lr * states_0[-i - 2].grad)
+            if len(a) >= truncated_length:
+                break
+
+        self.node.update_memory(phi, s, a[::-1], dq)
+
+    def bp_train_step(self, x, y, lr):
+        self.node.train()
+        optimizer = torch.optim.SGD([self.node.A], lr)
+        optimizer.zero_grad()
+        pred = self.forward(x)
+        loss = (y - pred) ** 2
+        loss.backward()
+        optimizer.step()
+
+    def custom_train_two_step(self, x, y, num_1, num_2, lr, dq):
+        for (_x, _y) in zip(x, y):
+            self.custom_train_step(_x, _y, lr, dq)
+            self.bp_train_step(_x.T, _y, 0.0001 * lr)
+        return
 
     def test(self, x, y):
-        loss = []
-        acc = []
-        for (_x, _y) in zip(x, y):
-            out = self.forward(_x)
-            loss.append(((out - _y) ** 2).detach().numpy())
-            acc.append(((out > 0.5) == _y).numpy())
-
-        return np.mean(loss), np.mean(acc)
+        out = self.forward(x)
+        l = torch.mean((out - torch.from_numpy(y)) ** 2).detach().data.numpy()
+        acc = (out > 0.5) == torch.from_numpy(y)
+        acc = np.mean(acc.data.numpy())
+        return l, acc
 
 
 if __name__ == "__main__":
@@ -167,12 +232,13 @@ if __name__ == "__main__":
     # model.cuda()
     start = time.time()
     print('start training')
-    for i in range(100):
-        model.custom_train(x_train, y_train, 0.01, 0.3)
-        print(model.node.A.shape, model.test(x_test, y_test))
+    for i in range(40):
+        # model.custom_train(x_train, y_train, 0.01, 0.3)
+        model.custom_train_two_step(x_train, y_train, 1, 1, 0.01, 0.3)
+        print('epoch:', i, model.node.A.shape, model.test(x_test, y_test))
     print(time.time() - start)
     # torch.save(model.node.state_dict(), 'model/%d.pkl' % tomita_type)
 
-    for i in range(50):
-        x_test, y_test = generate_tomita(100, 16, tomita_type)
-        print(model.test(x_test, y_test))
+    # for i in range(50):
+    #     x_test, y_test = generate_tomita(100, 16, tomita_type)
+    #     print(model.test(x_test, y_test))
