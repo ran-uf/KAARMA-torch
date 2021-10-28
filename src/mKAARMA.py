@@ -26,7 +26,8 @@ class MKAARMACell(torch.nn.Module):
         for idx, m in enumerate(self.models):
             _, _state = m(phi, state)
             new_state.append(_state)
-            output.append(self.similarity(_state, idx))
+            output.append(torch.sum(self.similarity(_state, idx), dim=1, keepdim=True))
+            # output.append(self.similarity(_state, idx))
         new_state = torch.stack(new_state, dim=1)
         # output = self.similarity(new_state)
         output = torch.cat(output, dim=1)
