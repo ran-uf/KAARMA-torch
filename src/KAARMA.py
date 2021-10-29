@@ -217,7 +217,7 @@ if __name__ == "__main__":
     import time
     x_train = []
     y_train = []
-    tomita_type = 5
+    tomita_type = 4
     a = [3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     a.sort()
     for i in a:
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     # model.cuda()
     start = time.time()
     print('start training')
-    for i in range(40):
+    for i in range(4000):
         # model.custom_train(x_train, y_train, 0.01, 0.3)
         model.custom_train_two_step(x_train, y_train, 1, 1, 0.01, 0.3)
         print('epoch:', i, model.node.A.shape, model.test(x_test, y_test))

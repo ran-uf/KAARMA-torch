@@ -10,14 +10,6 @@ class MKAARMACell(torch.nn.Module):
         # self.n_trajectories = trajectories.shape[0]
 
     def similarity(self, s, idx):
-        batch_size = s.shape[0]
-        r = []
-        # for _s in s:
-        #     _r = (self.trajectories[idx] - _s.repeat(self.trajectories[idx].shape[0], 1)) ** 2
-        #     _r = torch.sum(_r, dim=1)
-        #     _r = torch.exp(-self.similarity_size * _r)
-        #     r.append(_r)
-        # return torch.stack(r, dim=0)
         return self.trajectories[idx](s)
 
     def forward(self, phi, state):
@@ -26,8 +18,8 @@ class MKAARMACell(torch.nn.Module):
         for idx, m in enumerate(self.models):
             _, _state = m(phi, state)
             new_state.append(_state)
-            output.append(torch.sum(self.similarity(_state, idx), dim=1, keepdim=True))
-            # output.append(self.similarity(_state, idx))
+            # output.append(torch.sum(self.similarity(_state, idx), dim=1, keepdim=True))
+            output.append(self.similarity(_state, idx))
         new_state = torch.stack(new_state, dim=1)
         # output = self.similarity(new_state)
         output = torch.cat(output, dim=1)
@@ -56,10 +48,11 @@ class DiscMaker(torch.nn.Module):
 
         error = self.init_error.repeat(x.shape[0])
         o = []
-        # gate_state = self.init_gate.repeat(x.shape[0], 1)
-        gate_state = torch.zeros((x.shape[0], 3))
-        gate_state[:, torch.randint(3, (1,))] = 1
-        gate_state = gate_state.to(next(self.parameters()).device)        # gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
+        gate_state = self.init_gate.repeat(x.shape[0], 1)
+        # gate_state = torch.zeros((x.shape[0], 3))
+        # gate_state[:, torch.randint(3, (1,))] = 1
+        # gate_state = gate_state.to(next(self.parameters()).device)
+        # gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
             # kaarma_state = torch.matmul(gate_state, new_state)[:, 0, :]
@@ -69,8 +62,8 @@ class DiscMaker(torch.nn.Module):
             gate = self.linear_decode(controller_output[:, :-1])
             # gate = gate * 100
             gate = torch.softmax(gate, dim=1)
-            theta_0 = self.normalize(controller_output[:, -1].unsqueeze(1))
-            theta = torch.sigmoid(theta_0)
+            # theta_0 = self.normalize()
+            theta = torch.sigmoid(controller_output[:, -1].unsqueeze(1))
             # print(controller_output[:, -1].detach().numpy(),
             #       theta_0.detach().numpy(),
             #       theta.detach().numpy())

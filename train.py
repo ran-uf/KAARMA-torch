@@ -20,7 +20,7 @@ from optparse import OptionParser
 parser = OptionParser()
 parser.add_option("--batch_size", type="int", dest="batch_size", default=1)
 parser.add_option("--device", type="str", dest="device", default="cpu")
-parser.add_option("--epochs", type="int", dest="epochs", default=100000)
+parser.add_option("--epochs", type="int", dest="epochs", default=1000000)
 (options, args) = parser.parse_args()
 
 
@@ -79,8 +79,8 @@ decoder = MKAARMACell(models, trajectories).eval()
 m = 20
 n = 128
 controller_size = 50
-# controller = LSTMController(19 + m, controller_size, 2)
-controller = LSTMController(3 + 1 + m, controller_size, 2)
+controller = LSTMController(19 + m, controller_size, 2)
+# controller = LSTMController(3 + 1 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
 readhead = NTMReadHead(memory, controller_size)
 writehead = NTMWriteHead(memory, controller_size)
@@ -93,67 +93,12 @@ discmaker = DiscMaker(decoder, ntm).to(device)
 for tra in discmaker.mkaarma.trajectories:
     tra.to(device)
 
-# discmaker.load_state_dict(torch.load('model_grand_true.pkl'))
-
-# model = net()
-
-# model.cuda()
-# x = x.cuda()
-# y = y.cuda()
-
-# optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-#                              lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=1e-5)
-# optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
-# criterion = torch.nn.MSELoss()
-# criterion = myloss
-#
-# epochs = 100000
-# report_freq = 50
-# min_loss = 0.01
-#
 models = torch.nn.ModuleList()
 for i in [0, 1, 2]:
     _m = KAARMA(4, 1, 2, 2)
     _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
     _m.eval()
     models.append(_m)
-
-# x = []
-# y = []
-# order = np.random.permutation([0, 1, 2, 3])
-# l = []
-# for j in order:
-#     _l = np.random.randint(10, 50)
-#     l.append(_l)
-#     string_x, string_y = get_data(1, _l, models[j], j + 4)
-#     x.append(string_x)
-#     y.append(string_y)
-# x = np.hstack(x)
-# y = np.hstack(y)
-# x = torch.from_numpy(x.astype(np.float32))
-# y = torch.from_numpy(y.astype(np.float32))
-# pred = model(x, y)
-# gate = torch.cat(model.gate_trajectory).data.numpy()[:, 0, :]
-# pred = pred > 0.5
-# print(pred == (y > 0.5))
-#
-# grand_truth = np.zeros((x.shape[1], 4))
-# prev = 0
-# grand_truth[prev:prev + l[0], 0] = 1
-# prev += l[0]
-# grand_truth[prev:prev + l[1], 1] = 1
-# prev += l[1]
-# grand_truth[prev:prev + l[2], 2] = 1
-# prev += l[2]
-# grand_truth[prev:prev + l[3], 3] = 1
-#
-# plt.title('grand truth')
-# plt.plot(grand_truth)
-# plt.show()
-#
-# plt.title('result')
-# plt.plot(gate)
-# plt.show()
 
 test_x = []
 test_y = []
