@@ -110,44 +110,6 @@ class KAARMA(nn.Module):
     def custom_train(self, x, y, lr, dq):
         for (_x, _y) in zip(x, y):
             self.custom_train_step(_x, _y, lr, dq)
-            # truncated_length = 6
-            # states_0 = [None]
-            # states_1 = [self.node.initial_state]
-            # a = []
-            # s = []
-            # phi = []
-            # for inp in _x:
-            #     state = states_1[-1].detach()
-            #     state.requires_grad = True
-            #     phi.append(inp)
-            #     s.append(state)
-            #     if len(phi) > truncated_length:
-            #         del phi[0]
-            #         del s[0]
-            #     out, new_state = self.node(inp, state)
-            #     states_0.append(state)
-            #     states_1.append(new_state)
-            #
-            # state = states_1[-1].detach()
-            # state.requires_grad = True
-            #
-            # # loss = self.loss(torch.mm(self.node.II, state.T), torch.Tensor([[_y]]))
-            # loss = self.loss(state[:, -1], torch.Tensor([_y]))
-            # states_0.append(state)
-            # states_1.append(loss)
-            # loss.backward(retain_graph=True)
-            # a.append(- lr * states_0[-1].grad)
-            #
-            # for i in range(len(states_0) - 3):
-            #     if states_0[-i - 2] is None:
-            #         break
-            #     curr_grad = states_0[-i-1].grad
-            #     states_1[-i - 2].backward(curr_grad, retain_graph=True)
-            #     a.append(- lr * states_0[-i-2].grad)
-            #     if len(a) >= truncated_length:
-            #         break
-            #
-            # self.node.update_memory(phi, s, a[::-1], dq)
 
     def custom_train_step(self, x, y, lr, dq):
         truncated_length = 6
@@ -199,9 +161,13 @@ class KAARMA(nn.Module):
         optimizer.step()
 
     def custom_train_two_step(self, x, y, num_1, num_2, lr, dq):
-        for (_x, _y) in zip(x, y):
-            self.custom_train_step(_x, _y, lr, dq)
-            self.bp_train_step(_x.T, _y, 0.0001 * lr)
+        for idx, (_x, _y) in enumerate(zip(x, y)):
+            if idx % (num_1 + num_2) < num_1:
+                self.custom_train_step(_x, _y, lr, dq)
+                self.bp_train_step(_x.T, _y, 0.00001 * lr)
+            else:
+                # _x = _x.unsqueeze(0)
+                self.bp_train_step(_x.T, _y, lr)
         return
 
     def test(self, x, y):
@@ -217,7 +183,7 @@ if __name__ == "__main__":
     import time
     x_train = []
     y_train = []
-    tomita_type = 4
+    tomita_type = 6
     a = [3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     a.sort()
     for i in a:
@@ -234,10 +200,10 @@ if __name__ == "__main__":
     print('start training')
     for i in range(4000):
         # model.custom_train(x_train, y_train, 0.01, 0.3)
-        model.custom_train_two_step(x_train, y_train, 1, 1, 0.01, 0.3)
+        model.custom_train_two_step(x_train, y_train, 1, 0, 0.01, 0.3)
         print('epoch:', i, model.node.A.shape, model.test(x_test, y_test))
     print(time.time() - start)
-    # torch.save(model.node.state_dict(), 'model/%d.pkl' % tomita_type)
+    # torch.save(model.node.state_dict(), '../model/%d.pkl' % tomita_type)
 
     # for i in range(50):
     #     x_test, y_test = generate_tomita(100, 16, tomita_type)
