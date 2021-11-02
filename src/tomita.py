@@ -2,13 +2,23 @@ import numpy as np
 
 
 def generate_tomita_sequence(num, length, tp=1):
-    string = np.zeros((num, length))
-    label = np.zeros((num, length))
-    for i in range(num):
-        string[i, :] = (np.random.random(length) > 0.5).astype(np.float32)
-        for j in range(length):
-            label[i, j] = check_label(string[i, :j + 1], tp)
-    return string, label
+    if tp == 4:
+        string = np.zeros((num, length))
+        label = np.zeros((num, length))
+        for i in range(num):
+            while label[i, int(length * 0.5)] == 0:
+                string[i, :] = (np.random.random(length) > 0.5).astype(np.float32)
+                for j in range(length):
+                    label[i, j] = check_label(string[i, :j + 1], tp)
+        return string, label
+    else:
+        string = np.zeros((num, length))
+        label = np.zeros((num, length))
+        for i in range(num):
+            string[i, :] = (np.random.random(length) > 0.5).astype(np.float32)
+            for j in range(length):
+                label[i, j] = check_label(string[i, :j + 1], tp)
+        return string, label
 
 
 def generate_tomita(num, length, tp=1):
