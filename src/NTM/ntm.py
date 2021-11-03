@@ -26,7 +26,7 @@ class NTM(nn.Module):
 
         # Save arguments
         self.num_inputs = num_inputs
-        self.num_outputs = num_outputs
+        self.hidden_size = num_outputs
         self.controller = controller
         self.memory = memory
         self.heads = heads

@@ -183,7 +183,7 @@ if __name__ == "__main__":
     import time
     x_train = []
     y_train = []
-    tomita_type = 6
+    tomita_type = 4
     a = [3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     a.sort()
     for i in a:

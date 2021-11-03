@@ -43,49 +43,35 @@ def train(model, train_x, train_y, cri, optim):
     return loss.cpu().data.numpy()
 
 
-def train_single_seq(model, models, ls, epochs, freq_rep, cri, optim):
-    min_loss = 1
-    for epoch in range(epochs):
-        tp = np.random.choice(ls)
-        # string_x, string_y = get_data(1, np.random.randint(10, 50), models[tp], tp + 4)
-        string_x, string_y = generate_tomita_sequence(1, np.random.randint(10, 50), tp + 4)
-
-        x = torch.from_numpy(string_x.astype(np.float32))
-        y = torch.from_numpy(string_y.astype(np.float32))
-        _loss = train(model, x, y, cri, optim)
-
-        if (epoch + 1) % freq_rep == 0:
-            print(_loss)
-        if _loss < min_loss:
-            torch.save(model.state_dict(), 'model.pkl')
-            min_loss = np.mean(_loss)
-
-
 models = torch.nn.ModuleList()
 # trajectories = []
 trajectories = torch.nn.ModuleList()
+n_tra = []
 for i in [4, 5, 6]:
     m = BaseModel(4, 1, 2, 2)
-    m.load_state_dict(torch.load('model/%d.pkl' % i))
+    m.load_state_dict(torch.load('model/n_%d.pkl' % i))
     m.requires_grad_(False)
     models.append(m)
-    tra = np.load('trajectory/%d.npy' % i).astype(np.float32)
+    tra = np.load('trajectory/n_%d.npy' % i).astype(np.float32)
+    n_tra.append(tra.shape[0])
     trajectories.append(Kernel(tra.shape[0], tra.shape[1], 10, tra))
     # trajectories.append(torch.from_numpy(np.load('trajectory/%d.npy' % i).astype(np.float32)))
+n_tra = np.sum(n_tra)
 # trajectories = np.vstack(trajectories)
 # trajectories = torch.from_numpy(trajectories)
 decoder = MKAARMACell(models, trajectories).eval()
 
-m = 20
-n = 128
-controller_size = 50
-controller = LSTMController(19 + m, controller_size, 2)
-# controller = LSTMController(3 + 1 + m, controller_size, 2)
+m = n_tra + 1
+n = 64
+controller_size = 100
+controller = LSTMController(n_tra + 1 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
 readhead = NTMReadHead(memory, controller_size)
 writehead = NTMWriteHead(memory, controller_size)
 heads = torch.nn.ModuleList([readhead, writehead])
 ntm = NTM(25, 25, controller, memory, heads)
+
+lstm = torch.nn.LSTM(19, 25, 2)
 
 
 device = options.device
@@ -96,7 +82,7 @@ for tra in discmaker.mkaarma.trajectories:
 models = torch.nn.ModuleList()
 for i in [0, 1, 2]:
     _m = KAARMA(4, 1, 2, 2)
-    _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
+    _m.node.load_state_dict(torch.load('model/n_%d.pkl' % (i + 4)))
     _m.eval()
     models.append(_m)
 
@@ -113,7 +99,7 @@ test_y = torch.from_numpy(test_y.astype(np.float32)).to(device)
 
 criterion = torch.nn.MSELoss()
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, discmaker.parameters()),
-                             lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
+                             lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
 # optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, discmaker.parameters()), lr=0.0001)
 min_loss = 1
 report_freq = 100
@@ -125,10 +111,10 @@ for epoch in range(options.epochs):
     y = []
     avg_loss = []
     order = np.random.permutation([0, 1, 2])
-    length = np.random.randint(40, 80)
-    for j in order:
-        string_x, string_y = get_data(options.batch_size, length, models[j], j + 4)
-        # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
+    length = np.random.randint(10, 50)
+    for j in [order[0]]:
+        # string_x, string_y = get_data(options.batch_size, length, models[j], j + 4)
+        string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
         x.append(string_x)
         y.append(string_y)
     x = np.vstack(x)
@@ -156,17 +142,17 @@ for epoch in range(options.epochs):
     # scheduler.step()
 
 
-# for j in range(3):
-#     # string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
-#     string_x, string_y = get_data(1, 100, models[j], j + 4)
-#     string_x = torch.from_numpy(string_x.astype(np.float32))
-#     string_y = torch.from_numpy(string_y.astype(np.float32))
-#     pred = discmaker(string_x, string_y)
-#     gate = torch.stack(discmaker.gate_trajectories, dim=1)
-#     plt.title('result grammar #%d' % (j + 4))
-#     plt.plot(gate.data.numpy()[0])
-#     plt.legend(['4', '5', '6'])
-#     plt.show()
+for j in range(3):
+    string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
+    # string_x, string_y = get_data(1, 100, models[j], j + 4)
+    string_x = torch.from_numpy(string_x.astype(np.float32))
+    string_y = torch.from_numpy(string_y.astype(np.float32))
+    pred = discmaker(string_x, string_y)
+    gate = torch.stack(discmaker.gate_trajectories, dim=1)
+    plt.title('result grammar #%d' % (j + 4))
+    plt.plot(gate.data.numpy()[0])
+    plt.legend(['4', '5', '6'])
+    plt.show()
 
 # print(gate.data.numpy()[0])
 torch.save(discmaker.state_dict(), 'model_real.pkl')

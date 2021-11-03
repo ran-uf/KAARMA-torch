@@ -59,7 +59,7 @@ for i in [4, 5, 6]:
 decoder = MKAARMACell(models, trajectories).eval()
 
 m = 20
-n = 32
+n = 128
 controller_size = 50
 controller = LSTMController(19 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
@@ -71,11 +71,12 @@ ntm = NTM(25, 25, controller, memory, heads)
 
 device = options.device
 discmaker = DiscMaker(decoder, ntm)
-discmaker.load_state_dict(torch.load("test.pkl"))
+discmaker.load_state_dict(torch.load("model_1027.pkl"))
 discmaker.to(device)
 for tra in discmaker.mkaarma.trajectories:
     tra.to(device)
 models = torch.nn.ModuleList()
+
 for i in [0, 1, 2]:
     _m = KAARMA(4, 1, 2, 2)
     _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
@@ -83,12 +84,13 @@ for i in [0, 1, 2]:
     models.append(_m)
 
 
-order = [1, 2, 0]
+order = [1, 0, 1, 0, 1, 0, 1]
+# order = np.random.permutation(order)
 x = []
 y = []
 lengths = []
 for j in order:
-    length = np.random.randint(40, 100)
+    length = np.random.randint(60, 100)
     lengths.append(length)
     string_x, string_y = get_data(1, length, models[j], j + 4)
     # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)

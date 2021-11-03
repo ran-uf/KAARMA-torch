@@ -1,4 +1,5 @@
 import torch
+from src.NTM.ntm import NTM
 
 
 class MKAARMACell(torch.nn.Module):
@@ -33,8 +34,8 @@ class DiscMaker(torch.nn.Module):
         self.controller = controller
         self.gate_trajectories = None
         # self.linear_encode = torch.nn.Linear(100, 20)
-        self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, 3)
-        self.normalize = torch.nn.Linear(1, 1, bias=True)
+        self.linear_decode = torch.nn.Linear(controller.hidden_size - 1, 3)
+        # self.normalize = torch.nn.Linear(1, 1, bias=True)
         self.register_buffer('init_error', torch.ones(1))
         self.register_buffer('init_gate', torch.Tensor([[0.3333, 0.3333, 0.3334]]))
         # self.register_buffer('init_gate', torch.softmax(torch.rand((1, 3)), dim=1))
@@ -43,8 +44,11 @@ class DiscMaker(torch.nn.Module):
         self.gate_trajectories = []
         seq_len = x.shape[1]
         kaarma_state = None
-        controller_state = self.controller.create_new_state(x.shape[0], next(self.parameters()).device)
-        self.controller.memory.reset(x.shape[0])
+        if type(self.controller) is NTM:
+            controller_state = self.controller.create_new_state(x.shape[0], next(self.parameters()).device)
+            self.controller.memory.reset(x.shape[0])
+        else:
+            controller_state = None
 
         error = self.init_error.repeat(x.shape[0])
         o = []
@@ -57,8 +61,14 @@ class DiscMaker(torch.nn.Module):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
             # kaarma_state = torch.matmul(gate_state, new_state)[:, 0, :]
             # encoded = self.linear_encode(encoded)
+            # lstm
+            # inp = torch.cat([encoded, error.unsqueeze(1)], dim=1).unsqueeze(1)
+            # controller_output, controller_state = self.controller(inp, controller_state)
+            # controller_output = controller_output.view(-1, 25)
+            # NTM
             inp = torch.cat([encoded, error.unsqueeze(1)], dim=1)
             controller_output, controller_state = self.controller(inp, controller_state)
+
             gate = self.linear_decode(controller_output[:, :-1])
             # gate = gate * 100
             gate = torch.softmax(gate, dim=1)
