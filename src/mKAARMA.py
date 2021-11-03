@@ -33,6 +33,7 @@ class DiscMaker(torch.nn.Module):
         self.mkaarma = mkaarma
         self.controller = controller
         self.gate_trajectories = None
+        self.similarities = None
         # self.linear_encode = torch.nn.Linear(100, 20)
         self.linear_decode = torch.nn.Linear(controller.hidden_size - 1, 3)
         # self.normalize = torch.nn.Linear(1, 1, bias=True)
@@ -42,6 +43,8 @@ class DiscMaker(torch.nn.Module):
 
     def forward(self, x, y):
         self.gate_trajectories = []
+        self.similarities = []
+        self.errors = []
         seq_len = x.shape[1]
         kaarma_state = None
         if type(self.controller) is NTM:
@@ -52,6 +55,7 @@ class DiscMaker(torch.nn.Module):
 
         error = self.init_error.repeat(x.shape[0])
         o = []
+        p = []
         gate_state = self.init_gate.repeat(x.shape[0], 1)
         # gate_state = torch.zeros((x.shape[0], 3))
         # gate_state[:, torch.randint(3, (1,))] = 1
@@ -59,6 +63,8 @@ class DiscMaker(torch.nn.Module):
         # gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
+
+            self.similarities.append(encoded)
             # kaarma_state = torch.matmul(gate_state, new_state)[:, 0, :]
             # encoded = self.linear_encode(encoded)
             # lstm
@@ -83,9 +89,12 @@ class DiscMaker(torch.nn.Module):
             gate_state = gate
             pred = kaarma_state[:, -1]
             error = pred - y[:, i]
+            self.errors.append(error)
             o.append(pred)
+            penalty = torch.sum(gate * (1 - gate), dim=1, keepdim=True)
+            p.append(penalty)
 
-        return torch.stack(o, dim=1)
+        return torch.stack(o, dim=1), torch.stack(p, dim=1)
 
 
 if __name__ == "__main__":

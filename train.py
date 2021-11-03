@@ -36,8 +36,8 @@ def get_data(batch_size, length, m, tomita_type):
 
 def train(model, train_x, train_y, cri, optim):
     optim.zero_grad()
-    pred = model(train_x, train_y)
-    loss = cri(pred, train_y)
+    pred, penalty = model(train_x, train_y)
+    loss = cri(pred, train_y) + 0 * torch.mean(penalty)
     loss.backward()
     optim.step()
     return loss.cpu().data.numpy()
