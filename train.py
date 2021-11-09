@@ -4,7 +4,7 @@ import torch
 from src.NTM.memory import NTMMemory
 from src.NTM.controller import LSTMController
 from src.NTM.ntm import NTM
-from src.mKAARMA import MKAARMACell, DiscMaker
+from src.mKAARMA import MKAARMACell, DiscMaker, DiscMaker2
 from src.NTM.head import NTMReadHead, NTMWriteHead
 from src.KAARMA import KernelNode as BaseModel
 from src.kernel import Kernel
@@ -20,8 +20,9 @@ from optparse import OptionParser
 parser = OptionParser()
 parser.add_option("--batch_size", type="int", dest="batch_size", default=1)
 parser.add_option("--device", type="str", dest="device", default="cpu")
-parser.add_option("--epochs", type="int", dest="epochs", default=1000000)
+parser.add_option("--epochs", type="int", dest="epochs", default=1000)
 (options, args) = parser.parse_args()
+device = options.device
 
 
 def myloss(x, y):
@@ -37,67 +38,101 @@ def get_data(batch_size, length, m, tomita_type):
 def train(model, train_x, train_y, cri, optim):
     optim.zero_grad()
     pred, penalty = model(train_x, train_y)
-    loss = cri(pred, train_y) + 0 * torch.mean(penalty)
+    loss = cri(train_y, pred)  # + 0.0001 * torch.mean(penalty[:, 5:])
     loss.backward()
     optim.step()
     return loss.cpu().data.numpy()
+
+
+def test_data(grammars, dev):
+    t_x = []
+    t_y = []
+    for g in grammars:
+        _x, _y = generate_tomita_sequence(64, 128, g)
+        t_x.append(_x)
+        t_y.append(_y)
+    t_x = np.vstack(t_x)
+    t_y = np.vstack(t_y)
+    t_x = torch.from_numpy(t_x.astype(np.float32)).to(dev)
+    t_y = torch.from_numpy(t_y.astype(np.float32)).to(dev)
+    return t_x, t_y
+
+
+def train_data(grammars, batch_size, dev):
+    t_x = []
+    t_y = []
+    for _ in range(int(2000 / batch_size)):
+        for g in grammars:
+            lgh = np.random.randint(10, 80)
+            _x, _y = generate_tomita_sequence(batch_size, lgh, g)
+            # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
+            t_x.append(torch.from_numpy(_x.astype(np.float32)).to(dev))
+            t_y.append(torch.from_numpy(_y.astype(np.float32)).to(dev))
+
+    return t_x, t_y
 
 
 models = torch.nn.ModuleList()
 # trajectories = []
 trajectories = torch.nn.ModuleList()
 n_tra = []
-for i in [4, 5, 6]:
+for i in [5, 6]:
     m = BaseModel(4, 1, 2, 2)
     m.load_state_dict(torch.load('model/n_%d.pkl' % i))
     m.requires_grad_(False)
     models.append(m)
     tra = np.load('trajectory/n_%d.npy' % i).astype(np.float32)
+    trajectories.append(Kernel(tra.shape[0], tra.shape[1], 20, tra))
     n_tra.append(tra.shape[0])
-    trajectories.append(Kernel(tra.shape[0], tra.shape[1], 10, tra))
     # trajectories.append(torch.from_numpy(np.load('trajectory/%d.npy' % i).astype(np.float32)))
-n_tra = np.sum(n_tra)
 # trajectories = np.vstack(trajectories)
 # trajectories = torch.from_numpy(trajectories)
 decoder = MKAARMACell(models, trajectories).eval()
 
+n_tra = np.sum(n_tra)
 m = n_tra + 1
-n = 64
+n = 32
+
+# 1
 controller_size = 100
-controller = LSTMController(n_tra + 1 + m, controller_size, 2)
+controller = LSTMController(n_tra + 1 + m, controller_size, 3)
+# controller = LSTMController(3 + 1 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
 readhead = NTMReadHead(memory, controller_size)
 writehead = NTMWriteHead(memory, controller_size)
 heads = torch.nn.ModuleList([readhead, writehead])
 ntm = NTM(25, 25, controller, memory, heads)
 
-lstm = torch.nn.LSTM(19, 25, 2)
-
-
-device = options.device
+lstm = torch.nn.LSTM(25, 50, 2)
 discmaker = DiscMaker(decoder, ntm).to(device)
+
+# 2
+# controller_size = 100
+# controller = LSTMController(n_tra + m, controller_size, 2)
+# # controller = LSTMController(3 + 1 + m, controller_size, 2)
+# memory = NTMMemory(n, m, None)
+# readhead = NTMReadHead(memory, controller_size)
+# writehead = NTMWriteHead(memory, controller_size)
+# heads = torch.nn.ModuleList([readhead, writehead])
+# ntm = NTM(25, 25, controller, memory, heads)
+# discmaker = DiscMaker2(decoder, ntm).to(device)
+
+
 for tra in discmaker.mkaarma.trajectories:
     tra.to(device)
 
-models = torch.nn.ModuleList()
-for i in [0, 1, 2]:
-    _m = KAARMA(4, 1, 2, 2)
-    _m.node.load_state_dict(torch.load('model/n_%d.pkl' % (i + 4)))
-    _m.eval()
-    models.append(_m)
+# models = torch.nn.ModuleList()
+# for i in [1, 2]:
+#     _m = KAARMA(4, 1, 2, 2)
+#     _m.node.load_state_dict(torch.load('model/n_%d.pkl' % (i + 4)))
+#     _m.eval()
+#     models.append(_m)
 
-test_x = []
-test_y = []
-for i in range(3):
-    _x, _y = generate_tomita_sequence(64, 128, i + 4)
-    test_x.append(_x)
-    test_y.append(_y)
-test_x = np.vstack(test_x)
-test_y = np.vstack(test_y)
-test_x = torch.from_numpy(test_x.astype(np.float32)).to(device)
-test_y = torch.from_numpy(test_y.astype(np.float32)).to(device)
 
-criterion = torch.nn.MSELoss()
+train_x, train_y = train_data([5, 6], options.batch_size, options.device)
+test_x, test_y = test_data([5, 6], options.device)
+# criterion = torch.nn.MSELoss()
+criterion = torch.nn.BCELoss()
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, discmaker.parameters()),
                              lr=0.0001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0)
 # optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, discmaker.parameters()), lr=0.0001)
@@ -110,48 +145,52 @@ for epoch in range(options.epochs):
     x = []
     y = []
     avg_loss = []
-    order = np.random.permutation([0, 1, 2])
-    length = np.random.randint(10, 50)
-    for j in [order[0]]:
-        # string_x, string_y = get_data(options.batch_size, length, models[j], j + 4)
-        string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
-        x.append(string_x)
-        y.append(string_y)
-    x = np.vstack(x)
-    y = np.vstack(y)
-    # x = torch.from_numpy(x.astype(np.float32))
-    # y = torch.from_numpy(y.astype(np.float32))
-    x = torch.from_numpy(x.astype(np.float32)).to(device)
-    y = torch.from_numpy(y.astype(np.float32)).to(device)
-    # scheduler.step()
-    _loss = train(discmaker, x, y, criterion, optimizer)
-    avg_loss.append(_loss)
+    idx_shuffle = np.arange(0, len(train_x))
+    np.random.shuffle(idx_shuffle)
 
-    if (epoch + 1) % report_freq == 0:
-        print('\r', np.mean(avg_loss))
+    for idx in idx_shuffle:
+        x = train_x[idx]
+        y = train_y[idx]
+        _loss = train(discmaker, x, y, criterion, optimizer)
+        avg_loss.append(_loss)
+    print('\r', np.mean(avg_loss))
+    pred, _ = discmaker(test_x, test_y)
+    test_loss = criterion(test_y, pred)
+    print('\r', 'loss test: %f' % test_loss)
+    # if epoch > options.epochs - 10000:
+        # if (epoch + 1) % report_freq == 0:
 
-    if epoch > options.epochs - 10000:
-        if (epoch + 1) % report_freq == 0:
-            pred = discmaker(test_x, test_y)
-            test_loss = torch.mean((test_y - pred) ** 2)
-            print('\r', 'loss test: %f' % test_loss)
-            if test_loss < min_loss:
-                torch.save(discmaker.state_dict(), 'model_grand_true.pkl')
-                min_loss = test_loss
-                print('\r', 'new model saved, min_loss: %f' % test_loss)
-    # scheduler.step()
+    if test_loss < min_loss:
+        torch.save(discmaker.state_dict(), 'model_grand_true.pkl')
+        min_loss = test_loss
+        print('\r', 'new model saved, min_loss: %f' % test_loss)
+    scheduler.step()
 
 
-for j in range(3):
-    string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
-    # string_x, string_y = get_data(1, 100, models[j], j + 4)
+for j in range(2):
+    # string_x, string_y = generate_tomita_sequence(1, 100, j + 4)
+    string_x, string_y = get_data(1, 100, models[j], j + 5)
     string_x = torch.from_numpy(string_x.astype(np.float32))
     string_y = torch.from_numpy(string_y.astype(np.float32))
     pred = discmaker(string_x, string_y)
-    gate = torch.stack(discmaker.gate_trajectories, dim=1)
-    plt.title('result grammar #%d' % (j + 4))
+    gate = torch.stack(discmaker.gate_trajectories, dim=1).detach()
+    similarity = torch.stack(discmaker.similarities, dim=1).detach()
+    switches = torch.stack(discmaker.switches, dim=1).squeeze(2).detach()
+
+    plt.figure()
+    plt.suptitle('result grammar #%d' % (j + 5))
+    plt.subplot(311)
     plt.plot(gate.data.numpy()[0])
-    plt.legend(['4', '5', '6'])
+    plt.legend(['5', '6'])
+    plt.title('gate')
+    plt.subplot(312)
+    plt.title('similarity')
+    plt.imshow(similarity.T)
+    plt.yticks([0, 4])
+    plt.subplot(313)
+    plt.title(r'$\theta$')
+    plt.plot(switches.T)
+    plt.tight_layout()
     plt.show()
 
 # print(gate.data.numpy()[0])
