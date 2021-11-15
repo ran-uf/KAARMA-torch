@@ -46,22 +46,26 @@ def get_data(batch_size, length, m, tomita_type):
 models = torch.nn.ModuleList()
 # trajectories = []
 trajectories = torch.nn.ModuleList()
+n_tra = []
 for i in [4, 5, 6]:
     m = BaseModel(4, 1, 2, 2)
-    m.load_state_dict(torch.load('model/%d.pkl' % i))
+    m.load_state_dict(torch.load('model/n_%d.pkl' % i))
     m.requires_grad_(False)
     models.append(m)
-    tra = np.load('trajectory/%d.npy' % i).astype(np.float32)
+    tra = np.load('trajectory/n_%d.npy' % i).astype(np.float32)
     trajectories.append(Kernel(tra.shape[0], tra.shape[1], 10, tra))
+    n_tra.append(tra.shape[0])
     # trajectories.append(torch.from_numpy(np.load('trajectory/%d.npy' % i).astype(np.float32)))
 # trajectories = np.vstack(trajectories)
 # trajectories = torch.from_numpy(trajectories)
 decoder = MKAARMACell(models, trajectories).eval()
 
-m = 20
-n = 128
-controller_size = 50
-controller = LSTMController(19 + m, controller_size, 2)
+n_tra = np.sum(n_tra)
+
+m = 15
+n = 48
+controller_size = 100
+controller = LSTMController(n_tra + 1 + m, controller_size, 2)
 memory = NTMMemory(n, m, None)
 readhead = NTMReadHead(memory, controller_size)
 writehead = NTMWriteHead(memory, controller_size)
@@ -71,7 +75,7 @@ ntm = NTM(25, 25, controller, memory, heads)
 
 device = options.device
 discmaker = DiscMaker(decoder, ntm)
-discmaker.load_state_dict(torch.load("model_1027.pkl"))
+discmaker.load_state_dict(torch.load("model_1104.pkl"))
 discmaker.to(device)
 for tra in discmaker.mkaarma.trajectories:
     tra.to(device)
@@ -79,12 +83,12 @@ models = torch.nn.ModuleList()
 
 for i in [0, 1, 2]:
     _m = KAARMA(4, 1, 2, 2)
-    _m.node.load_state_dict(torch.load('model/%d.pkl' % (i + 4)))
+    _m.node.load_state_dict(torch.load('model/n_%d.pkl' % (i + 4)))
     _m.eval()
     models.append(_m)
 
 
-order = [1, 0, 1, 0, 1, 0, 1]
+order = [0]
 # order = np.random.permutation(order)
 x = []
 y = []
@@ -102,8 +106,16 @@ x = torch.from_numpy(x.astype(np.float32))
 y = torch.from_numpy(y.astype(np.float32))
 pred = discmaker(x, y)
 gate = torch.vstack(discmaker.gate_trajectories).detach().numpy()
+simlarity = torch.vstack(discmaker.similarities).detach().numpy()
+error = torch.vstack(discmaker.errors).detach()
 
 plot_ground_truth(3, order, lengths)
 
+plt.figure()
+plt.subplot(311)
 plt.plot(gate)
+plt.subplot(312)
+plt.imshow(simlarity.T)
+plt.subplot(313)
+plt.plot(error)
 plt.show()

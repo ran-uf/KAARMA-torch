@@ -1,5 +1,6 @@
 import torch
 from src.NTM.ntm import NTM
+import numpy as np
 
 
 class MKAARMACell(torch.nn.Module):
@@ -10,6 +11,11 @@ class MKAARMACell(torch.nn.Module):
         self.similarity_size = 10
         self.num_cells = len(models)
         # self.n_trajectories = trajectories.shape[0]
+
+    def rand_state(self):
+        idx = np.random.randint(0, self.num_cells)
+        idx_0 = np.random.randint(0, self.trajectories[idx].w.shape[0])
+        return self.trajectories[idx].w[idx_0]
 
     def similarity(self, s, idx):
         return self.trajectories[idx](s)
@@ -36,32 +42,37 @@ class DiscMaker(torch.nn.Module):
         self.gate_trajectories = None
         self.similarities = None
         # self.linear_encode = torch.nn.Linear(100, 20)
-        self.linear_decode = torch.nn.Linear(controller.num_outputs - 1, mkaarma.num_cells)
+        self.linear_decode = torch.nn.Linear(controller.hidden_size - 1, mkaarma.num_cells)
         self.register_buffer('init_error', torch.ones(1))
 
         self.register_buffer('init_gate', torch.softmax(torch.ones((1, mkaarma.num_cells)), dim=1))
+        self.p_coeff = 3.14 * mkaarma.num_cells / 2 / (mkaarma.num_cells - 1)
         # self.register_buffer('init_gate', torch.softmax(torch.rand((1, 3)), dim=1))
+
+    def rand_state(self):
+        return self.mkaarma.rand_state()
 
     def forward(self, x, y):
         self.gate_trajectories = []
         self.similarities = []
         self.errors = []
+        self.switches = []
         seq_len = x.shape[1]
-        kaarma_state = None
+        # kaarma_state = None
+        kaarma_state = self.rand_state().unsqueeze(0).repeat(x.shape[0], 1)
         if type(self.controller) is NTM:
             controller_state = self.controller.create_new_state(x.shape[0], next(self.parameters()).device)
             self.controller.memory.reset(x.shape[0])
         else:
             controller_state = None
 
-        error = self.init_error.repeat(x.shape[0])
+        # error = self.init_error.repeat(x.shape[0])
+        # gate_state = self.init_gate.repeat(x.shape[0], 1)
+
+        error = torch.rand(x.shape[0])
+        gate_state = torch.softmax(torch.rand(x.shape[0], self.mkaarma.num_cells), dim=1)
         o = []
         p = []
-        gate_state = self.init_gate.repeat(x.shape[0], 1)
-        # gate_state = torch.zeros((x.shape[0], 3))
-        # gate_state[:, torch.randint(3, (1,))] = 1
-        # gate_state = gate_state.to(next(self.parameters()).device)
-        # gate_state = torch.Tensor([[0.25, 0.25, 0.25, 0.25]]).repeat(x.shape[0], 1)
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
 
@@ -78,17 +89,19 @@ class DiscMaker(torch.nn.Module):
             gate = self.linear_decode(controller_output[:, :-1])
             gate = torch.softmax(gate, dim=1)
             # theta_0 = self.normalize()
-            theta = torch.sigmoid(controller_output[:, -1].unsqueeze(1))
-
+            theta = torch.sigmoid(5 * controller_output[:, -1].unsqueeze(1))
+            self.switches.append(theta)
             gate = gate * theta + gate_state * (1 - theta)
             self.gate_trajectories.append(gate)
             kaarma_state = torch.bmm(gate.unsqueeze(1), new_state)[:, 0, :]
             gate_state = gate
             pred = kaarma_state[:, -1]
+            pred = torch.relu(pred) - torch.relu(pred - 1)
             error = pred - y[:, i]
             self.errors.append(error)
             o.append(pred)
             penalty = torch.sum(gate * (1 - gate), dim=1, keepdim=True)
+            penalty = torch.tan(self.p_coeff * penalty)
             p.append(penalty)
 
         return torch.stack(o, dim=1), torch.stack(p, dim=1)
