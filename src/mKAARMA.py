@@ -66,11 +66,11 @@ class DiscMaker(torch.nn.Module):
         else:
             controller_state = None
 
-        # error = self.init_error.repeat(x.shape[0])
-        # gate_state = self.init_gate.repeat(x.shape[0], 1)
+        error = self.init_error.repeat(x.shape[0])
+        gate_state = self.init_gate.repeat(x.shape[0], 1)
 
-        error = torch.rand(x.shape[0])
-        gate_state = torch.softmax(torch.rand(x.shape[0], self.mkaarma.num_cells), dim=1)
+        # error = torch.rand(x.shape[0])
+        # gate_state = torch.softmax(torch.rand(x.shape[0], self.mkaarma.num_cells), dim=1)
         o = []
         p = []
         for i in range(seq_len):
@@ -86,6 +86,7 @@ class DiscMaker(torch.nn.Module):
             # NTM
             inp = torch.cat([encoded, error.unsqueeze(1)], dim=1)
             controller_output, controller_state = self.controller(inp, controller_state)
+
             gate = self.linear_decode(controller_output[:, :-1])
             gate = torch.softmax(gate, dim=1)
             # theta_0 = self.normalize()
