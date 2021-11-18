@@ -31,14 +31,21 @@ class KernelNode(nn.Module):
         if state is None:
             state = self.initial_state.repeat(inp.shape[0], 1)
 
-        new_state = []
-        for _inp, _state in zip(inp, state):
-            _new_state = torch.mm(self.A.T, torch.exp(
-                -self._as * torch.sum((self.S - _state.repeat(self.memory_size, 1)) ** 2, dim=1,
-                                      keepdim=True)) * torch.exp(
-                -self._au * torch.sum((self.Phi - _inp) ** 2, dim=1, keepdim=True)))
-            new_state.append(_new_state.T)
-        new_state = torch.cat(new_state, dim=0)
+        # new_state = []
+        # for _inp, _state in zip(inp, state):
+        #     _new_state = torch.mm(self.A.T, torch.exp(
+        #         -self._as * torch.sum((self.S - _state.repeat(self.memory_size, 1)) ** 2, dim=1,
+        #                               keepdim=True)) * torch.exp(
+        #         -self._au * torch.sum((self.Phi - _inp) ** 2, dim=1, keepdim=True)))
+        #     new_state.append(_new_state.T)
+        # new_state = torch.cat(new_state, dim=0)
+
+        k_s = (self.S.repeat(state.shape[0], 1, 1) - state.unsqueeze(1).repeat(1, self.S.shape[0], 1)) ** 2
+        k_s = torch.exp(-self._as * torch.sum(k_s, dim=2, keepdim=True))
+        k_u = (self.Phi.repeat(state.shape[0], 1, 1) - inp.unsqueeze(1).unsqueeze(2).repeat(1, self.Phi.shape[0], 1)) ** 2
+        k_u = torch.exp(-self._au * torch.sum(k_u, dim=2, keepdim=True))
+        new_state = torch.bmm(self.A.T.repeat(state.shape[0], 1, 1), k_s * k_u).squeeze(2)
+
         out = new_state[:, -1]
         # out = torch.mm(self.II, new_state)
         return out, new_state
