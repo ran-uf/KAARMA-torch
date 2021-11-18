@@ -20,13 +20,16 @@ class Kernel(torch.nn.Module):
                 raise ValueError('Unknown data type!')
 
     def forward(self, x):
-        o = []
-        for _x in x:
-            _o = (self.w - _x.repeat(self.n, 1)) ** 2
-            o.append(torch.exp(
-                -self.kernel_size * torch.sum((self.w - _x.repeat(self.n, 1)) ** 2, dim=1)
-            ))
-        return torch.stack(o, dim=0)
+        # o = []
+        # for _x in x:
+        #     _o = (self.w - _x.repeat(self.n, 1)) ** 2
+        #     o.append(torch.exp(
+        #         -self.kernel_size * torch.sum((self.w - _x.repeat(self.n, 1)) ** 2, dim=1)
+        #     ))
+        # return torch.stack(o, dim=0)
+
+        return torch.exp(-self.kernel_size * torch.sum((self.w.repeat(x.shape[0], 1, 1) - x.unsqueeze(1).repeat(1, self.n, 1)) ** 2, dim=2))
+
 
 
 # if __name__ == "__main__":
