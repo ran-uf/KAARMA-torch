@@ -41,7 +41,7 @@ def plot(model, lst):
         # string_x, string_y = get_data(1, 100, models[j], j + 5)
         string_x = torch.from_numpy(string_x.astype(np.float32))
         string_y = torch.from_numpy(string_y.astype(np.float32))
-        pred = model(string_x, string_y)
+        _ = model(string_x, string_y)
         gate = torch.stack(model.gate_trajectories, dim=1).detach()
         similarity = torch.stack(model.similarities, dim=1).detach()
         switches = torch.stack(model.switches, dim=1).squeeze(2).detach()
@@ -100,6 +100,26 @@ def train_data(grammars, batch_size, dev):
     return t_x, t_y
 
 
+def train_data_seq(grammars, batch_size, dev):
+    t_x = []
+    t_y = []
+    for _ in range(int(2000 / batch_size)):
+        idx_g = np.random.permutation(grammars)
+        xx = []
+        yy = []
+        for g in idx_g:
+            lgh = np.random.randint(10, 80)
+            _x, _y = generate_tomita_sequence(batch_size, lgh, g)
+            # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
+            xx.append(_x)
+            yy.append(_y)
+        xx = np.hstack(xx)
+        yy = np.hstack(yy)
+        t_x.append(torch.from_numpy(xx.astype(np.float32)).to(dev))
+        t_y.append(torch.from_numpy(yy.astype(np.float32)).to(dev))
+
+    return t_x, t_y
+
 models = torch.nn.ModuleList()
 # trajectories = []
 trajectories = torch.nn.ModuleList()
@@ -131,7 +151,7 @@ writehead = NTMWriteHead(memory, controller_size)
 heads = torch.nn.ModuleList([readhead, writehead])
 ntm = NTM(25, 25, controller, memory, heads)
 
-lstm = torch.nn.LSTM(25, 50, 2)
+lstm = torch.nn.LSTM(22, 25, 2)
 discmaker = DiscMaker(decoder, ntm).to(args.device)
 
 # 2
@@ -157,7 +177,7 @@ for tra in discmaker.mkaarma.trajectories:
 #     models.append(_m)
 
 
-train_x, train_y = train_data(args.model_list, args.batch_size, args.device)
+train_x, train_y = train_data_seq(args.model_list, args.batch_size, args.device)
 test_x, test_y = test_data(args.model_list, args.device)
 criterion = torch.nn.MSELoss()
 # criterion = torch.nn.BCELoss()
