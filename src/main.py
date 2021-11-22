@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 from mpl_toolkits.mplot3d import Axes3D
 from KAARMA import *
@@ -15,10 +17,13 @@ model.eval()
 np.random.seed(2)
 strings, desires = generate_tomita_sequence(2000, 100, tomita_type)
 
+strings = torch.from_numpy(strings.astype(np.float32))
+desires = torch.from_numpy(desires.astype(np.float32))
+
 res, state_trajectory = model(strings, True)
 state_trajectory = state_trajectory.detach().view(-1, 4).data.numpy()
 res = res > 0.5
-print(np.sum(res.data.numpy() == desires))
+print(np.sum(res.data.numpy() == desires.data.numpy()))
 pca = PCA(n_components=3)
 X_reduced = pca.fit_transform(state_trajectory)
 

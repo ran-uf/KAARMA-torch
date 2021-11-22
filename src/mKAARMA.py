@@ -58,25 +58,25 @@ class DiscMaker(torch.nn.Module):
         self.errors = []
         self.switches = []
         seq_len = x.shape[1]
-        # kaarma_state = None
-        kaarma_state = self.rand_state().unsqueeze(0).repeat(x.shape[0], 1)
+        kaarma_state = None
+        # kaarma_state = self.rand_state().unsqueeze(0).repeat(x.shape[0], 1)
         if type(self.controller) is NTM:
             controller_state = self.controller.create_new_state(x.shape[0], next(self.parameters()).device)
             self.controller.memory.reset(x.shape[0])
         else:
             controller_state = None
 
-        error = self.init_error.repeat(x.shape[0])
-        gate_state = self.init_gate.repeat(x.shape[0], 1)
+        error = self.init_error.repeat(x.shape[0]).to(next(self.parameters()).device)
+        gate_state = self.init_gate.repeat(x.shape[0], 1).to(next(self.parameters()).device)
 
         # error = torch.rand(x.shape[0])
         # gate_state = torch.softmax(torch.rand(x.shape[0], self.mkaarma.num_cells), dim=1)
         o = []
-        p = []
+        # p = []
         for i in range(seq_len):
             encoded, new_state = self.mkaarma(x[:, i], kaarma_state)
 
-            self.similarities.append(encoded)
+            self.similarities.append(encoded.data)
             # kaarma_state = torch.matmul(gate_state, new_state)[:, 0, :]
             # encoded = self.linear_encode(encoded)
             # lstm
@@ -91,21 +91,21 @@ class DiscMaker(torch.nn.Module):
             gate = torch.softmax(gate, dim=1)
             # theta_0 = self.normalize()
             theta = torch.sigmoid(5 * controller_output[:, -1].unsqueeze(1))
-            self.switches.append(theta)
+            self.switches.append(theta.data)
             gate = gate * theta + gate_state * (1 - theta)
-            self.gate_trajectories.append(gate)
+            self.gate_trajectories.append(gate.data)
             kaarma_state = torch.bmm(gate.unsqueeze(1), new_state)[:, 0, :]
             gate_state = gate
             pred = kaarma_state[:, -1]
             pred = torch.relu(pred) - torch.relu(pred - 1)
-            error = pred - y[:, i]
+            error = (pred - y[:, i]) * 0.9 + 0.1 * error
             self.errors.append(error)
             o.append(pred)
-            penalty = torch.sum(gate * (1 - gate), dim=1, keepdim=True)
-            penalty = torch.tan(self.p_coeff * penalty)
-            p.append(penalty)
+            # penalty = torch.sum(gate * (1 - gate), dim=1, keepdim=True)
+            # penalty = torch.tan(self.p_coeff * penalty)
+            # p.append(penalty)
 
-        return torch.stack(o, dim=1), torch.stack(p, dim=1)
+        return torch.stack(o, dim=1)
 
 
 if __name__ == "__main__":
