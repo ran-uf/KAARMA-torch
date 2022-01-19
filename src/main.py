@@ -10,11 +10,11 @@ from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 
 
-tomita_type = 5
+tomita_type = 6
 model = KAARMA(4, 1, 2, 2)
-model.node.load_state_dict(torch.load('model/relu_%d.pkl' % tomita_type))
+model.node.load_state_dict(torch.load('../model/nn_%d.pkl' % tomita_type))
 model.eval()
-np.random.seed(2)
+# np.random.seed(2)
 strings, desires = generate_tomita_sequence(2000, 100, tomita_type)
 
 strings = torch.from_numpy(strings.astype(np.float32))
@@ -27,7 +27,7 @@ print(np.sum(res.data.numpy() == desires.data.numpy()))
 pca = PCA(n_components=3)
 X_reduced = pca.fit_transform(state_trajectory)
 
-kmeans = KMeans(n_clusters=9).fit(state_trajectory)
+kmeans = KMeans(n_clusters=15).fit(state_trajectory)
 X_centers = pca.transform(kmeans.cluster_centers_)
 # np.save('trajectory/%d.npy' % tomita_type, kmeans.cluster_centers_)
 plt.scatter(X_reduced[:, 0], X_reduced[:, 1])

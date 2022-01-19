@@ -118,6 +118,87 @@ def check_label(string, tp):
         return 1
 
 
+def train_data(grammars, batch_size, num=2048):
+    t_x = []
+    t_y = []
+    for _ in range(int(num / batch_size)):
+        for g in grammars:
+            lgh = np.random.randint(10, 80)
+            _x, _y = generate_tomita_sequence(batch_size, lgh, g)
+            # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
+            # t_x.append(torch.from_numpy(_x.astype(np.float32)).to(dev))
+            # t_y.append(torch.from_numpy(_y.astype(np.float32)).to(dev))
+            t_x.append(_x.astype(np.float32))
+            t_y.append(_y.astype(np.float32))
+    return t_x, t_y
+
+
+def train_data_seq(grammars, batch_size, num=2048):
+    t_x = []
+    t_y = []
+    for i in [0, 1]:
+        for _ in range(int(num / batch_size)):
+            idx_g = np.random.permutation(grammars[:i + 1])
+            xx = []
+            yy = []
+            for g in idx_g:
+                lgh = np.random.randint(50, 100)
+                _x, _y = generate_tomita_sequence(batch_size, lgh, g)
+                # string_x, string_y = generate_tomita_sequence(options.batch_size, length, j + 4)
+                xx.append(_x)
+                yy.append(_y)
+            xx = np.hstack(xx)
+            yy = np.hstack(yy)
+            t_x.append(xx.astype(np.float32))
+            t_y.append(yy.astype(np.float32))
+
+    return t_x, t_y
+
+
+def test_data(grammars):
+    t_x = []
+    t_y = []
+    for g in grammars:
+        _x, _y = generate_tomita_sequence(64, 128, g)
+        t_x.append(_x)
+        t_y.append(_y)
+    t_x = np.vstack(t_x)
+    t_y = np.vstack(t_y)
+    t_x = t_x.astype(np.float32)
+    t_y = t_y.astype(np.float32)
+    return t_x, t_y
+
+
+def test_data_seq(grammars):
+    def per(_l):
+        r = [np.random.choice(_l, 1)]
+        for _ in range(3):
+            a = np.random.choice(_l, 1)
+            while a == r[-1]:
+                a = np.random.choice(_l, 1)
+            r.append(a)
+        return r
+    __x = []
+    __y = []
+    for _ in range(100):
+        t_x = []
+        t_y = []
+        for g in per(grammars):
+            _x, _y = generate_tomita_sequence(1, 60, g)
+            t_x.append(_x)
+            t_y.append(_y)
+        t_x = np.hstack(t_x)
+        t_y = np.hstack(t_y)
+        __x.append(t_x)
+        __y.append(t_y)
+
+    _x = np.vstack(__x)
+    _y = np.vstack(__y)
+    t_x = _x.astype(np.float32)
+    t_y = _y.astype(np.float32)
+    return t_x, t_y
+
+
 if __name__ == '__main__':
     strings = generate_tomita(50, 3, 7)
     print('done')

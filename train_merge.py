@@ -4,7 +4,7 @@ import torch
 from src.NTM.memory import NTMMemory
 from src.NTM.controller import LSTMController
 from src.NTM.ntm import NTM
-from src.mKAARMA import MKAARMACell
+from src.mKAARMA import MKAARMACellmerge
 from src.mKAARMA import MMoE as DiscMaker
 from src.NTM.head import NTMReadHead, NTMWriteHead
 from src.KAARMA import KernelNode as BaseModel
@@ -21,10 +21,10 @@ from progressbar import progressbar
 
 
 parser = argparse.ArgumentParser(description='...')
-parser.add_argument("--batch_size", type=int, dest="batch_size", default=2)
+parser.add_argument("--batch_size", type=int, dest="batch_size", default=1)
 parser.add_argument("--device", type=str, dest="device", default="cpu")
 parser.add_argument("--epochs", type=int, dest="epochs", default=1000)
-parser.add_argument('-m', '--model_list', type=str, nargs='+', action='append', help='model list', default=[4, 5, 6])
+parser.add_argument('-m', '--model_list', type=str, nargs='+', action='append', help='model list', default=[5, 6])
 args = parser.parse_args()
 
 
@@ -105,42 +105,6 @@ def plot_seq(model, lst):
     plt.show()
 
 
-# def plot_seq(model, lst):
-#     lst_s = np.random.permutation(lst)
-#     _x, _y = [], []
-#     for j in lst_s:
-#         string_x, string_y = generate_tomita_sequence(1, 60, j)
-#         _x.append(string_x)
-#         _y.append(string_y)
-#
-#     _x = np.hstack(_x)
-#     _y = np.hstack(_y)
-#
-#     _x = torch.from_numpy(_x.astype(np.float32))
-#     _y = torch.from_numpy(_y.astype(np.float32))
-#     _ = model(_x, _y)
-#
-#     gate = torch.stack(model.gate_trajectories, dim=1).detach()
-#     similarity = torch.stack(model.similarities, dim=1).detach()
-#     switches = torch.stack(model.switches, dim=1).squeeze(2).detach()
-#
-#     plt.figure()
-#     plt.suptitle('result grammar %d %d %d' % (lst_s[0], lst_s[1], lst_s[2]))
-#     plt.subplot(311)
-#     plt.plot(gate.data.numpy()[0])
-#     plt.legend(lst)
-#     plt.title('gate')
-#     plt.subplot(312)
-#     plt.title('similarity')
-#     plt.imshow(similarity.T)
-#     # plt.yticks([0, 4])
-#     plt.subplot(313)
-#     plt.title(r'$\theta$')
-#     plt.plot(switches.T)
-#     plt.tight_layout()
-#     plt.show()
-
-
 def train(model, train_x, train_y, cri, optim):
     optim.zero_grad()
     pred, penalty = model(train_x, train_y)
@@ -159,60 +123,17 @@ for i in args.model_list:
     m.load_state_dict(torch.load('model/nn_%d.pkl' % i))
     m.requires_grad_(False)
     models.append(m)
-    tra = np.load('trajectory/nn_%d.npy' % i).astype(np.float32)
-    trajectories.append(Kernel(tra.shape[0], tra.shape[1], 10, tra))
-    n_tra.append(tra.shape[0])
     # trajectories.append(torch.from_numpy(np.load('trajectory/%d.npy' % i).astype(np.float32)))
 # trajectories = np.vstack(trajectories)
 # trajectories = torch.from_numpy(trajectories)
-decoder = MKAARMACell(models, trajectories).eval()
-
-n_tra = np.sum(n_tra)
-m = n_tra + 1
-n = 128
-
-# 1
-controller_size = 100
-controller = LSTMController((n_tra + 1 + m * 2), controller_size, 3)
-# controller = LSTMController(8 + 1 + 9, controller_size, 3)
-
-# controller = LSTMController(3 + 1 + m, controller_size, 2)
-memory = NTMMemory(n, m, None)
-# memory = NTMMemory(n, 9, None)
-readhead_1 = NTMReadHead(memory, controller_size)
-readhead_2 = NTMReadHead(memory, controller_size)
-writehead = NTMWriteHead(memory, controller_size)
-heads = torch.nn.ModuleList([readhead_1, readhead_2, writehead])
-ntm = NTM(25, 25, controller, memory, heads)
-
-lstm = torch.nn.LSTM(22, 25, 2)
-# discmaker = DiscMaker(decoder, ntm).to(args.device)
+tra = np.load('trajectory/nn_56.npy').astype(np.float32)
+trajectories = Kernel(tra.shape[0], tra.shape[1], 10, tra)
+decoder = MKAARMACellmerge(models, trajectories).eval()
 discmaker = DiscMaker(decoder).to(args.device)
+discmaker.to(args.device)
+discmaker.mkaarma.trajectories.to(args.device)
 
-# 2
-# controller_size = 100
-# controller = LSTMController(n_tra + m, controller_size, 2)
-# # controller = LSTMController(3 + 1 + m, controller_size, 2)
-# memory = NTMMemory(n, m, None)
-# readhead = NTMReadHead(memory, controller_size)
-# writehead = NTMWriteHead(memory, controller_size)
-# heads = torch.nn.ModuleList([readhead, writehead])
-# ntm = NTM(25, 25, controller, memory, heads)
-# discmaker = DiscMaker2(decoder, ntm).to(device)
-
-
-for tra in discmaker.mkaarma.trajectories:
-    tra.to(args.device)
-
-# models = torch.nn.ModuleList()
-# for i in [1, 2]:
-#     _m = KAARMA(4, 1, 2, 2)
-#     _m.node.load_state_dict(torch.load('model/n_%d.pkl' % (i + 4)))
-#     _m.eval()
-#     models.append(_m)
-
-
-train_x, train_y = train_data_seq(args.model_list, args.batch_size, 4096)
+train_x, train_y = train_data_seq(args.model_list, args.batch_size)
 test_x, test_y = test_data_seq(args.model_list)
 test_x = torch.from_numpy(test_x).to(args.device)
 test_y = torch.from_numpy(test_y).to(args.device)

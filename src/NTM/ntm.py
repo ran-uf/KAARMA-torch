@@ -88,8 +88,8 @@ class NTM(nn.Module):
 
         # Generate Output
         inp2 = torch.cat([controller_outp] + reads, dim=1)
-        o = torch.sigmoid(self.fc(inp2))
-
+        # o = torch.sigmoid(self.fc(inp2))
+        o = self.fc(inp2)
         # Pack the current state
         state = (reads, controller_state, heads_states)
 

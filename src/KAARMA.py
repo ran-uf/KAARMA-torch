@@ -30,6 +30,7 @@ class KernelNode(nn.Module):
     def forward(self, inp, state):
         if state is None:
             state = self.initial_state.repeat(inp.shape[0], 1)
+            # state = torch.rand(inp.shape[0], self.initial_state.shape[0]) * 0.1
 
         # new_state = []
         # for _inp, _state in zip(inp, state):
@@ -180,8 +181,8 @@ class KAARMA(nn.Module):
 
     def test(self, x, y):
         out = self.forward(x)
-        l = torch.mean((out - torch.from_numpy(y)) ** 2).detach().data.numpy()
-        acc = (out > 0.5) == torch.from_numpy(y)
+        l = torch.mean((out - y) ** 2).detach().data.numpy()
+        acc = (out > 0.5) == y
         acc = np.mean(acc.data.numpy())
         return l, acc
 
@@ -202,13 +203,16 @@ if __name__ == "__main__":
 
     x_test, y_test = generate_tomita(100, 16, tomita_type)
     print("test set", np.mean(y_test))
+    x_test = torch.from_numpy(x_test.astype(np.float32))
+    y_test = torch.from_numpy(y_test.astype(np.float32))
+
     model = KAARMA(4, 1, 2, 2)
     # model.cuda()
     start = time.time()
     print('start training')
     for i in range(4000):
         # model.custom_train(x_train, y_train, 0.01, 0.3)
-        model.custom_train_two_step(x_train, y_train, 1, 0, 0.005, 0.3)
+        model.custom_train_two_step(x_train, y_train, 1, 0, 0.001, 0.2)
         print('epoch:', i, model.node.A.shape, model.test(x_test, y_test))
     print(time.time() - start)
     # torch.save(model.node.state_dict(), '../model/%d.pkl' % tomita_type)
